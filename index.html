@@ -1,681 +1,458 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SIS PESRP — Live Dashboard</title>
+<title>SIS PESRP — School Enrollment Dashboard</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root {
-    --green:   #1A7A4A;
-    --green-l: #E6F4ED;
-    --red:     #C0392B;
-    --red-l:   #FDECEA;
-    --gold:    #B8860B;
-    --gold-l:  #FDF6E3;
-    --blue:    #1565C0;
-    --blue-l:  #E3F0FF;
-    --bg:      #F5F6FA;
-    --surface: #FFFFFF;
-    --border:  #E0E4EC;
-    --text:    #1A2035;
-    --muted:   #6B7280;
-    --mono:    'JetBrains Mono', monospace;
-    --sans:    'Inter', sans-serif;
+    --green:#1A7A4A; --green-l:#E6F4ED; --red:#C0392B; --red-l:#FDECEA;
+    --blue:#1565C0;  --blue-l:#E3F0FF;  --gold:#B8860B; --gold-l:#FDF6E3;
+    --bg:#F5F6FA; --surface:#fff; --border:#E0E4EC;
+    --text:#1A2035; --muted:#6B7280;
+    --mono:'JetBrains Mono',monospace; --sans:'Inter',sans-serif;
   }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:15px;line-height:1.6}
 
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-
-  body {
-    font-family: var(--sans);
-    background: var(--bg);
-    color: var(--text);
-    font-size: 15px;
-    line-height: 1.6;
-  }
-
-  /* ── TOP BAR ── */
-  .topbar {
-    background: var(--green);
-    color: #fff;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 28px;
-    height: 52px;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-
-  .topbar-left {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    font-size: 13px;
-    font-weight: 600;
-    letter-spacing: .02em;
-  }
-
-  .topbar-left img { height: 28px; filter: brightness(0) invert(1); }
-
-  .gov-badge {
-    font-size: 11px;
-    background: rgba(255,255,255,.15);
-    border: 1px solid rgba(255,255,255,.3);
-    border-radius: 3px;
-    padding: 2px 7px;
-    letter-spacing: .05em;
-  }
-
-  .topbar-right {
-    font-size: 12px;
-    opacity: .85;
-    font-family: var(--mono);
-  }
+  /* ── TOPBAR ── */
+  .topbar{background:var(--green);color:#fff;display:flex;align-items:center;
+    justify-content:space-between;padding:0 24px;height:48px;flex-wrap:wrap;gap:8px}
+  .topbar-l{display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600}
+  .gov-tag{font-size:10px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);
+    border-radius:3px;padding:2px 7px;letter-spacing:.05em}
+  .topbar-r{font-family:var(--mono);font-size:11px;opacity:.8}
 
   /* ── HEADER ── */
-  header {
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    padding: 24px 28px 20px;
-  }
+  header{background:var(--surface);border-bottom:1px solid var(--border);padding:20px 24px}
+  .hdr{max-width:1200px;margin:0 auto;display:flex;align-items:flex-start;
+    justify-content:space-between;flex-wrap:wrap;gap:16px}
+  h1{font-size:20px;font-weight:700;color:var(--green)}
+  .sub{color:var(--muted);font-size:13px;margin-top:2px}
 
-  .header-inner {
-    max-width: 1100px;
-    margin: 0 auto;
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 16px;
-  }
+  /* ── SUMMARY CARDS ── */
+  main{max-width:1200px;margin:24px auto;padding:0 24px 60px}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:24px}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;
+    padding:16px 18px;border-top:3px solid var(--green)}
+  .card.blue{border-top-color:var(--blue)}
+  .card.gold{border-top-color:var(--gold)}
+  .card.red{border-top-color:var(--red)}
+  .card-lbl{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600;margin-bottom:4px}
+  .card-val{font-size:26px;font-weight:700;font-family:var(--mono);letter-spacing:-.02em}
+  .card-sub{font-size:11px;color:var(--muted);margin-top:2px}
 
-  h1 {
-    font-size: 22px;
-    font-weight: 700;
-    color: var(--green);
-    margin-bottom: 4px;
-  }
+  /* ── CONTROLS ── */
+  .controls{background:var(--surface);border:1px solid var(--border);border-radius:10px;
+    padding:16px 18px;margin-bottom:20px;display:flex;align-items:center;
+    flex-wrap:wrap;gap:12px}
+  .ctrl-group{display:flex;flex-direction:column;gap:4px;flex:1;min-width:160px}
+  .ctrl-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+  input[type=text], select{
+    padding:8px 12px;border:1px solid var(--border);border-radius:6px;
+    font-family:var(--sans);font-size:13px;color:var(--text);background:var(--bg);
+    width:100%;outline:none}
+  input[type=text]:focus,select:focus{border-color:var(--green);background:#fff}
+  .btn-reset{padding:8px 14px;background:var(--red-l);color:var(--red);
+    border:1px solid var(--red);border-radius:6px;font-size:12px;font-weight:600;
+    cursor:pointer;white-space:nowrap;align-self:flex-end}
+  .btn-reset:hover{background:var(--red);color:#fff}
 
-  .subtitle { color: var(--muted); font-size: 13px; }
+  /* ── TABLE ── */
+  .tbl-wrap{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+  .tbl-head{padding:14px 18px;border-bottom:1px solid var(--border);
+    display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
+  .tbl-title{font-size:14px;font-weight:600}
+  .tbl-count{font-size:12px;font-family:var(--mono);color:var(--muted)}
+  .scroll{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:13px;min-width:700px}
+  th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;
+    color:var(--muted);font-weight:600;padding:10px 14px;border-bottom:2px solid var(--border);
+    background:#FAFBFC;white-space:nowrap;cursor:pointer;user-select:none}
+  th:hover{color:var(--green)}
+  th.asc::after{content:" ▲";font-size:9px}
+  th.desc::after{content:" ▼";font-size:9px}
+  td{padding:9px 14px;border-bottom:1px solid var(--border);vertical-align:middle}
+  tr:last-child td{border-bottom:none}
+  tr:hover td{background:#F8FFFC}
+  .badge{display:inline-block;font-size:10px;padding:2px 7px;border-radius:3px;
+    font-family:var(--mono);background:var(--blue-l);color:var(--blue)}
+  .bar-wrap{display:flex;align-items:center;gap:6px}
+  .bar{height:6px;border-radius:3px;background:var(--border);flex:1;overflow:hidden}
+  .bar-fill{height:100%;border-radius:3px}
+  .bar-fill.boys{background:#2980B9}
+  .bar-fill.girls{background:#E91E8C}
+  .bar-val{font-family:var(--mono);font-size:12px;min-width:38px;text-align:right}
 
-  /* E-Transfer status pill */
-  .etransfer-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 18px;
-    border-radius: 8px;
-    font-weight: 600;
-    font-size: 14px;
-    min-width: 200px;
-    justify-content: center;
-  }
+  /* ── PAGINATION ── */
+  .pager{display:flex;align-items:center;justify-content:center;gap:8px;padding:16px}
+  .pg-btn{padding:6px 12px;border:1px solid var(--border);border-radius:5px;
+    background:var(--surface);font-size:12px;cursor:pointer;color:var(--text)}
+  .pg-btn:hover{border-color:var(--green);color:var(--green)}
+  .pg-btn.active{background:var(--green);color:#fff;border-color:var(--green)}
+  .pg-btn:disabled{opacity:.4;cursor:default}
+  .pg-info{font-size:12px;color:var(--muted);font-family:var(--mono)}
 
-  .etransfer-pill.open  { background: var(--green-l); color: var(--green); border: 1.5px solid var(--green); }
-  .etransfer-pill.closed{ background: var(--red-l);   color: var(--red);   border: 1.5px solid var(--red);   }
-
-  .dot {
-    width: 9px; height: 9px;
-    border-radius: 50%;
-    flex-shrink: 0;
-  }
-
-  .dot.green { background: var(--green); animation: blink 1.5s ease-in-out infinite; }
-  .dot.red   { background: var(--red); }
-
-  @keyframes blink {
-    0%,100% { opacity:1 } 50% { opacity:.3 }
-  }
-
-  /* ── MAIN GRID ── */
-  main {
-    max-width: 1100px;
-    margin: 28px auto;
-    padding: 0 28px;
-  }
-
-  /* ── STAT CARDS ── */
-  .stat-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 16px;
-    margin-bottom: 28px;
-  }
-
-  .stat-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    position: relative;
-    overflow: hidden;
-  }
-
-  .stat-card::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 3px;
-  }
-
-  .stat-card.c-green::before { background: var(--green); }
-  .stat-card.c-blue::before  { background: var(--blue);  }
-  .stat-card.c-gold::before  { background: var(--gold);  }
-  .stat-card.c-red::before   { background: var(--red);   }
-
-  .stat-icon {
-    font-size: 24px;
-    margin-bottom: 4px;
-  }
-
-  .stat-label {
-    font-size: 12px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: .06em;
-    color: var(--muted);
-  }
-
-  .stat-value {
-    font-size: 28px;
-    font-weight: 700;
-    font-family: var(--mono);
-    color: var(--text);
-    letter-spacing: -.02em;
-  }
-
-  .stat-sub {
-    font-size: 12px;
-    color: var(--muted);
-  }
-
-  /* ── PANEL ── */
-  .panel {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    margin-bottom: 20px;
-    overflow: hidden;
-  }
-
-  .panel-head {
-    padding: 16px 20px;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-
-  .panel-title {
-    font-size: 15px;
-    font-weight: 600;
-  }
-
-  .panel-tag {
-    font-size: 11px;
-    font-family: var(--mono);
-    padding: 2px 8px;
-    border-radius: 3px;
-    letter-spacing: .05em;
-    text-transform: uppercase;
-  }
-
-  .tag-live { background: var(--green-l); color: var(--green); }
-  .tag-info { background: var(--blue-l);  color: var(--blue);  }
-  .tag-warn { background: var(--gold-l);  color: var(--gold);  }
-
-  .panel-body { padding: 20px; }
-
-  /* ── ETRANSFER DETAIL ── */
-  .etransfer-detail {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
-  }
-
-  @media (max-width: 560px) { .etransfer-detail { grid-template-columns: 1fr; } }
-
-  .detail-row {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-  }
-
-  .detail-label {
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: .08em;
-    color: var(--muted);
-    font-weight: 600;
-  }
-
-  .detail-val {
-    font-size: 15px;
-    font-weight: 600;
-    color: var(--text);
-  }
-
-  /* ── NOTICES ── */
-  .notice-list { display: flex; flex-direction: column; gap: 10px; }
-
-  .notice-item {
-    background: var(--gold-l);
-    border-left: 3px solid var(--gold);
-    border-radius: 0 6px 6px 0;
-    padding: 10px 14px;
-    font-size: 13px;
-    color: #4a3a00;
-  }
-
-  /* ── DATA TABLE ── */
-  .data-table-wrap { overflow-x: auto; }
-
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 13px;
-  }
-
-  th {
-    text-align: left;
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: .07em;
-    color: var(--muted);
-    font-weight: 600;
-    padding: 10px 14px;
-    border-bottom: 2px solid var(--border);
-    background: #FAFBFC;
-    white-space: nowrap;
-  }
-
-  td {
-    padding: 9px 14px;
-    border-bottom: 1px solid var(--border);
-    color: var(--text);
-    vertical-align: top;
-  }
-
-  tr:last-child td { border-bottom: none; }
-  tr:hover td { background: #F8F9FF; }
-
-  /* ── DISTRICTS TABLE ── */
-  .district-badge {
-    display: inline-block;
-    font-size: 11px;
-    padding: 2px 7px;
-    border-radius: 3px;
-    background: var(--blue-l);
-    color: var(--blue);
-    font-family: var(--mono);
-  }
-
-  /* ── FOOTER ── */
-  footer {
-    background: var(--surface);
-    border-top: 1px solid var(--border);
-    padding: 18px 28px;
-    text-align: center;
-    font-size: 12px;
-    color: var(--muted);
-    margin-top: 20px;
-  }
-
-  footer a { color: var(--green); text-decoration: none; }
-  footer a:hover { text-decoration: underline; }
+  /* ── API PANEL ── */
+  .api-panel{background:var(--surface);border:1px solid var(--border);border-radius:10px;
+    margin-top:20px;overflow:hidden}
+  .api-head{padding:14px 18px;border-bottom:1px solid var(--border);
+    display:flex;align-items:center;justify-content:space-between}
+  .api-head h3{font-size:14px;font-weight:600}
+  .api-body{padding:14px 18px;max-height:320px;overflow-y:auto}
+  .api-row{display:flex;gap:10px;align-items:flex-start;margin-bottom:10px;
+    font-size:12px;font-family:var(--mono);background:#FAFBFC;border:1px solid var(--border);
+    border-radius:6px;padding:8px 10px}
+  .api-status{padding:2px 6px;border-radius:3px;font-weight:700;font-size:11px;flex-shrink:0}
+  .s200{background:var(--green-l);color:var(--green)}
+  .s4xx{background:var(--red-l);color:var(--red)}
+  .api-url{word-break:break-all;color:var(--blue)}
 
   /* ── LOADING / ERROR ── */
-  .loading {
-    text-align: center;
-    padding: 40px;
-    color: var(--muted);
-    font-size: 14px;
-  }
-
-  .loading::before {
-    content: '';
-    display: block;
-    width: 28px; height: 28px;
-    border: 3px solid var(--border);
-    border-top-color: var(--green);
-    border-radius: 50%;
-    margin: 0 auto 12px;
-    animation: spin .8s linear infinite;
-  }
-
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  .error-box {
-    background: var(--red-l);
-    border: 1px solid var(--red);
-    border-radius: 8px;
-    padding: 16px 20px;
-    color: var(--red);
-    font-size: 13px;
-  }
-
-  /* ── UPDATED ── */
-  .updated-bar {
-    background: #EBF5F0;
-    border: 1px solid #B2D8C5;
-    border-radius: 6px;
-    padding: 8px 14px;
-    font-size: 12px;
-    color: var(--green);
-    font-family: var(--mono);
-    margin-bottom: 24px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
-  }
-
-  .updated-bar strong { color: var(--green); }
+  .center{text-align:center;padding:48px;color:var(--muted)}
+  .spinner{width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--green);
+    border-radius:50%;margin:0 auto 12px;animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .err{background:var(--red-l);border:1px solid var(--red);border-radius:8px;
+    padding:14px 18px;color:var(--red);font-size:13px;margin-bottom:20px}
+  .warn{background:var(--gold-l);border:1px solid var(--gold);border-radius:8px;
+    padding:14px 18px;color:#5a4000;font-size:13px;margin-bottom:20px}
 </style>
 </head>
 <body>
 
-<!-- TOP GOVERNMENT BAR -->
 <div class="topbar">
-  <div class="topbar-left">
-    🏫
-    <span>Punjab Education Sector Reform Programme (PESRP) — PMIU</span>
-    <span class="gov-badge">Government of Punjab</span>
+  <div class="topbar-l">🏫 SIS PESRP — Punjab School Information System
+    <span class="gov-tag">Govt of Punjab</span>
   </div>
-  <div class="topbar-right" id="live-clock">Loading…</div>
+  <div class="topbar-r" id="clock"></div>
 </div>
 
-<!-- HEADER -->
 <header>
-  <div class="header-inner">
+  <div class="hdr">
     <div>
-      <h1>SIS Live Dashboard</h1>
-      <p class="subtitle">School Information System · Auto-refreshed from sis.pesrp.edu.pk every 6 hours</p>
+      <h1>School-wise Enrollment Dashboard</h1>
+      <p class="sub">Live data from <a href="https://sis.pesrp.edu.pk/str/analysis" target="_blank"
+        style="color:var(--green)">sis.pesrp.edu.pk/str/analysis</a> · Updated every 6 hours via GitHub Actions</p>
     </div>
-    <div id="etransfer-pill-wrap">
-      <div class="etransfer-pill closed">
-        <span class="dot red"></span>
-        <span>Loading E-Transfer…</span>
-      </div>
-    </div>
+    <div id="updated-badge" style="font-size:12px;color:var(--muted);font-family:var(--mono)">Loading…</div>
   </div>
 </header>
 
 <main>
 
-  <!-- LAST UPDATED BAR -->
-  <div class="updated-bar" id="updated-bar">
-    ⏱ Checking data freshness…
+  <!-- SUMMARY CARDS -->
+  <div class="cards" id="cards">
+    <div class="card"><div class="card-lbl">Total Schools</div>
+      <div class="card-val" id="c-schools">—</div><div class="card-sub">Public schools</div></div>
+    <div class="card blue"><div class="card-lbl">Total Students</div>
+      <div class="card-val" id="c-students">—</div><div class="card-sub">Enrolled</div></div>
+    <div class="card"><div class="card-lbl">Boys</div>
+      <div class="card-val" id="c-boys">—</div><div class="card-sub">Male enrollment</div></div>
+    <div class="card gold"><div class="card-lbl">Girls</div>
+      <div class="card-val" id="c-girls">—</div><div class="card-sub">Female enrollment</div></div>
+    <div class="card red"><div class="card-lbl">Teachers</div>
+      <div class="card-val" id="c-teachers">—</div><div class="card-sub">Allocated</div></div>
   </div>
 
-  <!-- STAT CARDS -->
-  <div class="stat-grid" id="stat-grid">
-    <div class="stat-card c-green">
-      <div class="stat-icon">🏫</div>
-      <div class="stat-label">Data Source</div>
-      <div class="stat-value" style="font-size:16px;margin-top:4px">SIS PESRP</div>
-      <div class="stat-sub">Punjab public schools</div>
+  <!-- CONTROLS -->
+  <div class="controls">
+    <div class="ctrl-group" style="flex:2;min-width:220px">
+      <div class="ctrl-label">🔍 Search School Name</div>
+      <input type="text" id="q-name" placeholder="Type school name…" oninput="applyFilters()">
     </div>
-    <div class="stat-card c-blue">
-      <div class="stat-icon">📅</div>
-      <div class="stat-label">SIS Last Updated</div>
-      <div class="stat-value" id="sis-updated" style="font-size:16px;margin-top:4px">—</div>
-      <div class="stat-sub">Reported by SIS homepage</div>
+    <div class="ctrl-group">
+      <div class="ctrl-label">🗺 District</div>
+      <select id="q-district" onchange="applyFilters()">
+        <option value="">All Districts</option>
+      </select>
     </div>
-    <div class="stat-card c-gold">
-      <div class="stat-icon">🔄</div>
-      <div class="stat-label">E-Transfer Status</div>
-      <div class="stat-value" id="etransfer-big" style="font-size:22px;margin-top:4px">—</div>
-      <div class="stat-sub" id="etransfer-round-sub">Loading…</div>
+    <div class="ctrl-group">
+      <div class="ctrl-label">📍 Tehsil</div>
+      <select id="q-tehsil" onchange="applyFilters()">
+        <option value="">All Tehsils</option>
+      </select>
     </div>
-    <div class="stat-card c-red">
-      <div class="stat-icon">🕒</div>
-      <div class="stat-label">Dashboard Updated</div>
-      <div class="stat-value" id="scraped-at" style="font-size:14px;margin-top:4px;letter-spacing:0">—</div>
-      <div class="stat-sub">GitHub Actions run</div>
+    <div class="ctrl-group" style="min-width:120px">
+      <div class="ctrl-label">Sort by</div>
+      <select id="q-sort" onchange="applyFilters()">
+        <option value="total_desc">Students ↓</option>
+        <option value="total_asc">Students ↑</option>
+        <option value="name_asc">Name A→Z</option>
+        <option value="name_desc">Name Z→A</option>
+        <option value="teachers_desc">Teachers ↓</option>
+      </select>
     </div>
+    <button class="btn-reset" onclick="resetFilters()">Reset</button>
   </div>
 
-  <!-- E-TRANSFER PANEL -->
-  <div class="panel">
-    <div class="panel-head">
-      <span class="panel-title">📋 E-Transfer System Status</span>
-      <span class="panel-tag tag-live">Live</span>
+  <!-- TABLE -->
+  <div class="tbl-wrap">
+    <div class="tbl-head">
+      <div class="tbl-title">📋 School Enrollment Records</div>
+      <div class="tbl-count" id="row-count">Loading…</div>
     </div>
-    <div class="panel-body">
-      <div class="etransfer-detail" id="etransfer-detail">
-        <div class="loading">Loading E-Transfer details…</div>
-      </div>
+    <div id="main-body">
+      <div class="center"><div class="spinner"></div>Fetching school data…</div>
     </div>
+    <div class="pager" id="pager" style="display:none"></div>
   </div>
 
-  <!-- NOTICES PANEL -->
-  <div class="panel" id="notices-panel" style="display:none">
-    <div class="panel-head">
-      <span class="panel-title">📢 Official Notices &amp; Updates</span>
-      <span class="panel-tag tag-warn">From SIS Homepage</span>
+  <!-- DISCOVERED APIS -->
+  <div class="api-panel" id="api-panel" style="display:none">
+    <div class="api-head">
+      <h3>🔌 Auto-discovered AJAX Endpoints</h3>
+      <span style="font-size:11px;color:var(--muted)">Captured by network interceptor during scrape</span>
     </div>
-    <div class="panel-body">
-      <div class="notice-list" id="notice-list"></div>
-    </div>
-  </div>
-
-  <!-- DISTRICTS PANEL -->
-  <div class="panel" id="districts-panel" style="display:none">
-    <div class="panel-head">
-      <span class="panel-title">🗺️ Available Districts</span>
-      <span class="panel-tag tag-info">From /str/analysis</span>
-    </div>
-    <div class="panel-body">
-      <div class="data-table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>District ID</th>
-              <th>District Name</th>
-            </tr>
-          </thead>
-          <tbody id="district-tbody"></tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
-  <!-- DATA TABLES PANEL -->
-  <div class="panel" id="tables-panel" style="display:none">
-    <div class="panel-head">
-      <span class="panel-title">📊 Statistics Tables</span>
-      <span class="panel-tag tag-info">From /str/analysis</span>
-    </div>
-    <div class="panel-body" id="tables-body">
-      <div class="loading">Loading stats…</div>
-    </div>
-  </div>
-
-  <!-- ABOUT -->
-  <div class="panel">
-    <div class="panel-head">
-      <span class="panel-title">ℹ️ About This Dashboard</span>
-    </div>
-    <div class="panel-body">
-      <p style="color:var(--muted);font-size:13px;margin-bottom:10px">
-        This dashboard is a <strong>read-only mirror</strong> of publicly accessible data from
-        <a href="https://sis.pesrp.edu.pk" target="_blank" style="color:var(--green)">sis.pesrp.edu.pk</a>
-        — the official School Information System of the Punjab Education Sector Reform Programme.
-        Data is scraped every 6 hours via GitHub Actions and served as a static JSON file on GitHub Pages.
-      </p>
-      <p style="color:var(--muted);font-size:13px">
-        <strong>Coverage:</strong> E-Transfer status, official notices, district list, and public enrollment statistics.
-        Data is self-reported by schools and is provisional in nature. For authoritative records,
-        visit the official SIS portal.
-      </p>
-    </div>
+    <div class="api-body" id="api-body"></div>
   </div>
 
 </main>
 
-<footer>
-  Data sourced from
-  <a href="https://sis.pesrp.edu.pk" target="_blank">sis.pesrp.edu.pk</a>
-  · PMIU PESRP, Government of Punjab ·
-  Dashboard hosted on
-  <a href="https://pages.github.com" target="_blank">GitHub Pages</a>
-  · Not an official government product
-</footer>
-
 <script>
-// ── Live clock ──────────────────────────────────────────────────────────────
-function tick() {
-  const now = new Date();
-  document.getElementById('live-clock').textContent =
-    now.toUTCString().replace('GMT','UTC');
-}
-tick();
-setInterval(tick, 1000);
+// ── State ────────────────────────────────────────────────────────────────────
+let ALL_SCHOOLS = [];
+let FILTERED    = [];
+let PAGE        = 1;
+const PER_PAGE  = 50;
 
-// ── Helpers ─────────────────────────────────────────────────────────────────
-function fmtDate(iso) {
-  if (!iso) return '—';
-  try {
-    return new Date(iso).toLocaleString('en-PK', {
-      timeZone: 'Asia/Karachi',
-      day: '2-digit', month: 'short', year: 'numeric',
-      hour: '2-digit', minute: '2-digit'
-    }) + ' PKT';
-  } catch(e) { return iso; }
+// ── Clock ────────────────────────────────────────────────────────────────────
+function tick(){
+  document.getElementById('clock').textContent = new Date().toUTCString().replace('GMT','UTC');
+}
+tick(); setInterval(tick,1000);
+
+// ── Format ───────────────────────────────────────────────────────────────────
+function fmt(n){ return Number(n||0).toLocaleString(); }
+function fmtDate(iso){
+  if(!iso) return '—';
+  try{ return new Date(iso).toLocaleString('en-PK',{timeZone:'Asia/Karachi',
+    day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})+' PKT';}
+  catch(e){ return iso; }
+}
+function esc(s){ return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ── Resolve field names flexibly ─────────────────────────────────────────────
+function getField(row, ...keys){
+  for(const k of keys){
+    // exact
+    if(row[k] !== undefined) return row[k];
+    // case-insensitive
+    const lk = k.toLowerCase();
+    for(const rk of Object.keys(row)){
+      if(rk.toLowerCase() === lk) return row[rk];
+    }
+    // partial match
+    for(const rk of Object.keys(row)){
+      if(rk.toLowerCase().includes(lk) || lk.includes(rk.toLowerCase())) return row[rk];
+    }
+  }
+  return '';
 }
 
-function esc(s) {
-  return String(s ?? '')
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+function schoolName(r){
+  return getField(r,'school_name','name','school','school_title','title') || '—';
 }
+function totalStudents(r){
+  const v = getField(r,'total_students','enrollment','students','total','enrolled');
+  const boys  = Number(getField(r,'boys','male','male_enrollment','boy_count')||0);
+  const girls = Number(getField(r,'girls','female','female_enrollment','girl_count')||0);
+  const tot   = Number(v||0);
+  return tot || (boys+girls) || 0;
+}
+function boysCount(r){ return Number(getField(r,'boys','male','male_enrollment','boy_count')||0); }
+function girlsCount(r){ return Number(getField(r,'girls','female','female_enrollment','girl_count')||0); }
+function teacherCount(r){ return Number(getField(r,'teachers','teacher_count','staff','allocated_teachers')||0); }
+function districtName(r){ return getField(r,'district','district_name')||'—'; }
+function tehsilName(r){ return getField(r,'tehsil','tehsil_name')||'—'; }
 
-// ── Load data.json ───────────────────────────────────────────────────────────
+// ── Load ─────────────────────────────────────────────────────────────────────
 fetch(`data.json?t=${Date.now()}`)
-  .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-  .then(d => renderDashboard(d))
-  .catch(err => {
-    document.getElementById('updated-bar').innerHTML =
-      `<span style="color:#C0392B">⚠ Could not load data.json — ${esc(err.message)}.
-       Run the GitHub Actions workflow first, or check the repo.</span>`;
+  .then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+  .then(d=>render(d))
+  .catch(err=>{
+    document.getElementById('main-body').innerHTML =
+      `<div class="center err">⚠ Could not load data.json — ${esc(err.message)}<br>
+       Run the GitHub Actions workflow first (Actions → Fetch SIS PESRP Data → Run workflow)</div>`;
   });
 
-// ── Render ───────────────────────────────────────────────────────────────────
-function renderDashboard(d) {
+function render(d){
+  // Updated badge
+  document.getElementById('updated-badge').textContent = 'Scraped: '+fmtDate(d.scraped_at);
 
-  // ── Updated bar
-  document.getElementById('updated-bar').innerHTML =
-    `✅ <strong>Dashboard last scraped:</strong> ${fmtDate(d.scraped_at)}
-     &nbsp;|&nbsp; Source: <a href="${esc(d.source)}" target="_blank" style="color:var(--green)">${esc(d.source)}</a>`;
+  // Summary cards
+  const s = d.summary || {};
+  document.getElementById('c-schools').textContent  = fmt(s.total_schools  || d.schools?.length || 0);
+  document.getElementById('c-students').textContent = fmt(s.total_students);
+  document.getElementById('c-boys').textContent     = fmt(s.total_boys);
+  document.getElementById('c-girls').textContent    = fmt(s.total_girls);
+  document.getElementById('c-teachers').textContent = fmt(s.total_teachers);
 
-  // ── SIS own "Last Updated" text
-  const sisUp = d.site_info?.last_updated_raw || '—';
-  document.getElementById('sis-updated').textContent =
-    sisUp.replace(/Last Updated at\s*:?\s*/i,'').trim() || sisUp;
+  ALL_SCHOOLS = d.schools || [];
 
-  // ── Scraped at
-  document.getElementById('scraped-at').textContent = fmtDate(d.scraped_at);
+  if(ALL_SCHOOLS.length === 0){
+    // No school data yet — show API discovery results and instructions
+    const apis = d.discovered_apis || [];
+    document.getElementById('main-body').innerHTML = `
+      <div class="warn" style="margin:20px">
+        <strong>⚠ No school-level rows collected yet.</strong><br><br>
+        The scraper runs in GitHub Actions — it intercepts AJAX calls on the SIS site.
+        On the first run it discovers the API endpoints. Check the <strong>Discovered APIs</strong>
+        panel below. Once endpoints are found, fetch.py is updated automatically on the next run.
+        ${apis.length ? '<br><br>'+apis.length+' endpoint(s) captured this run.' : ''}
+      </div>`;
+    showApis(d.discovered_apis);
+    document.getElementById('row-count').textContent = '0 rows';
+    return;
+  }
 
-  // ── E-Transfer pill
-  const et   = d.etransfer || {};
-  const open = et.accepting;
-  document.getElementById('etransfer-pill-wrap').innerHTML = `
-    <div class="etransfer-pill ${open ? 'open' : 'closed'}">
-      <span class="dot ${open ? 'green' : 'red'}"></span>
-      E-Transfer ${open ? 'OPEN' : 'CLOSED'}
+  // Populate district filter
+  const districts = [...new Set(ALL_SCHOOLS.map(districtName))].sort();
+  const dSel = document.getElementById('q-district');
+  districts.forEach(d=>{ const o=document.createElement('option'); o.value=d; o.textContent=d; dSel.appendChild(o); });
+
+  applyFilters();
+  showApis(d.discovered_apis);
+}
+
+// ── Filters & Sort ───────────────────────────────────────────────────────────
+function applyFilters(){
+  const q    = document.getElementById('q-name').value.toLowerCase().trim();
+  const dist = document.getElementById('q-district').value;
+  const teh  = document.getElementById('q-tehsil').value;
+  const sort = document.getElementById('q-sort').value;
+
+  // Update tehsil options when district changes
+  if(dist){
+    const tehsils = [...new Set(
+      ALL_SCHOOLS.filter(r=>districtName(r)===dist).map(tehsilName)
+    )].sort();
+    const tSel = document.getElementById('q-tehsil');
+    const cur  = tSel.value;
+    tSel.innerHTML = '<option value="">All Tehsils</option>';
+    tehsils.forEach(t=>{ const o=document.createElement('option'); o.value=t; o.textContent=t;
+      if(t===cur) o.selected=true; tSel.appendChild(o); });
+  }
+
+  FILTERED = ALL_SCHOOLS.filter(r=>{
+    if(dist && districtName(r) !== dist) return false;
+    if(teh  && tehsilName(r)   !== teh)  return false;
+    if(q && !schoolName(r).toLowerCase().includes(q)) return false;
+    return true;
+  });
+
+  // Sort
+  FILTERED.sort((a,b)=>{
+    if(sort==='total_desc') return totalStudents(b)-totalStudents(a);
+    if(sort==='total_asc')  return totalStudents(a)-totalStudents(b);
+    if(sort==='name_asc')   return schoolName(a).localeCompare(schoolName(b));
+    if(sort==='name_desc')  return schoolName(b).localeCompare(schoolName(a));
+    if(sort==='teachers_desc') return teacherCount(b)-teacherCount(a);
+    return 0;
+  });
+
+  PAGE = 1;
+  renderTable();
+}
+
+function resetFilters(){
+  document.getElementById('q-name').value='';
+  document.getElementById('q-district').value='';
+  document.getElementById('q-tehsil').innerHTML='<option value="">All Tehsils</option>';
+  document.getElementById('q-sort').value='total_desc';
+  applyFilters();
+}
+
+// ── Table ─────────────────────────────────────────────────────────────────────
+function renderTable(){
+  const total  = FILTERED.length;
+  const pages  = Math.ceil(total/PER_PAGE) || 1;
+  PAGE         = Math.min(PAGE, pages);
+  const start  = (PAGE-1)*PER_PAGE;
+  const slice  = FILTERED.slice(start, start+PER_PAGE);
+
+  document.getElementById('row-count').textContent =
+    `${fmt(total)} school${total!==1?'s':''} · page ${PAGE}/${pages}`;
+
+  if(slice.length===0){
+    document.getElementById('main-body').innerHTML =
+      '<div class="center">No schools match the current filters.</div>';
+    document.getElementById('pager').style.display='none';
+    return;
+  }
+
+  // Compute max for bar scaling
+  const maxTot = Math.max(...slice.map(totalStudents), 1);
+
+  const rows = slice.map((r,i)=>{
+    const tot  = totalStudents(r);
+    const boys = boysCount(r);
+    const gls  = girlsCount(r);
+    const tch  = teacherCount(r);
+    const bPct = tot ? Math.round(boys/tot*100) : 0;
+    const gPct = tot ? Math.round(gls/tot*100) : 0;
+    const barW = tot ? Math.round(tot/maxTot*100) : 0;
+
+    return `<tr>
+      <td style="color:var(--muted);font-family:var(--mono);font-size:11px">${start+i+1}</td>
+      <td><strong>${esc(schoolName(r))}</strong></td>
+      <td><span class="badge">${esc(districtName(r))}</span></td>
+      <td style="font-size:12px;color:var(--muted)">${esc(tehsilName(r))}</td>
+      <td>
+        <div class="bar-wrap">
+          <div class="bar"><div class="bar-fill boys" style="width:${barW}%"></div></div>
+          <div class="bar-val">${fmt(tot)}</div>
+        </div>
+      </td>
+      <td style="color:#2980B9;font-family:var(--mono)">${fmt(boys)} <span style="font-size:10px;color:var(--muted)">(${bPct}%)</span></td>
+      <td style="color:#E91E8C;font-family:var(--mono)">${fmt(gls)} <span style="font-size:10px;color:var(--muted)">(${gPct}%)</span></td>
+      <td style="font-family:var(--mono)">${tch ? fmt(tch) : '—'}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('main-body').innerHTML = `
+    <div class="scroll">
+      <table>
+        <thead><tr>
+          <th>#</th>
+          <th>School Name</th>
+          <th>District</th>
+          <th>Tehsil</th>
+          <th>Total Students</th>
+          <th>Boys</th>
+          <th>Girls</th>
+          <th>Teachers</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
     </div>`;
 
-  // ── E-Transfer big card
-  document.getElementById('etransfer-big').textContent = et.status_label || '—';
-  document.getElementById('etransfer-big').style.color = open ? 'var(--green)' : 'var(--red)';
+  // Pagination
+  const pager = document.getElementById('pager');
+  if(pages<=1){ pager.style.display='none'; return; }
+  pager.style.display='flex';
+  let btns = `<button class="pg-btn" onclick="goPage(${PAGE-1})" ${PAGE<=1?'disabled':''}>‹ Prev</button>`;
+  const lo = Math.max(1,PAGE-2), hi = Math.min(pages,PAGE+2);
+  if(lo>1) btns += `<button class="pg-btn" onclick="goPage(1)">1</button>${lo>2?'<span class="pg-info">…</span>':''}`;
+  for(let p=lo;p<=hi;p++) btns += `<button class="pg-btn${p===PAGE?' active':''}" onclick="goPage(${p})">${p}</button>`;
+  if(hi<pages) btns += `${hi<pages-1?'<span class="pg-info">…</span>':''}<button class="pg-btn" onclick="goPage(${pages})">${pages}</button>`;
+  btns += `<button class="pg-btn" onclick="goPage(${PAGE+1})" ${PAGE>=pages?'disabled':''}>Next ›</button>`;
+  pager.innerHTML = btns;
+}
 
-  const roundText = et.last_round_start
-    ? `Last round: ${et.last_round_start} → ${et.last_round_end}`
-    : 'Round dates not found';
-  document.getElementById('etransfer-round-sub').textContent = roundText;
+function goPage(p){ PAGE=p; renderTable(); window.scrollTo({top:0,behavior:'smooth'}); }
 
-  // ── E-Transfer detail panel
-  document.getElementById('etransfer-detail').innerHTML = `
-    <div class="detail-row">
-      <span class="detail-label">Current Status</span>
-      <span class="detail-val" style="color:${open ? 'var(--green)' : 'var(--red)'}">
-        ${open ? '✅ Applications Open' : '🔴 Not Accepting Applications'}
-      </span>
-    </div>
-    <div class="detail-row">
-      <span class="detail-label">Previous Round Start</span>
-      <span class="detail-val">${esc(et.last_round_start || '—')}</span>
-    </div>
-    <div class="detail-row">
-      <span class="detail-label">Previous Round End</span>
-      <span class="detail-val">${esc(et.last_round_end || '—')}</span>
-    </div>
-    <div class="detail-row">
-      <span class="detail-label">Data Type</span>
-      <span class="detail-val" style="font-size:13px;font-weight:500">Provisional (self-reported)</span>
-    </div>`;
-
-  // ── Notices
-  const notices = d.notices || [];
-  if (notices.length) {
-    document.getElementById('notices-panel').style.display = '';
-    document.getElementById('notice-list').innerHTML = notices
-      .map(n => `<div class="notice-item">${esc(n)}</div>`)
-      .join('');
-  }
-
-  // ── Districts
-  const districts = d.str_analysis?.districts || [];
-  if (districts.length) {
-    document.getElementById('districts-panel').style.display = '';
-    document.getElementById('district-tbody').innerHTML = districts
-      .map((dist, i) => `
-        <tr>
-          <td style="color:var(--muted);font-family:var(--mono)">${i + 1}</td>
-          <td><span class="district-badge">${esc(dist.id)}</span></td>
-          <td>${esc(dist.name)}</td>
-        </tr>`).join('');
-  }
-
-  // ── Statistics tables
-  const tables = d.str_analysis?.tables || [];
-  if (tables.length) {
-    document.getElementById('tables-panel').style.display = '';
-    document.getElementById('tables-body').innerHTML = tables.map((tbl, ti) => `
-      <div style="margin-bottom:24px">
-        <div style="font-size:12px;font-weight:600;color:var(--muted);
-                    text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">
-          Table ${ti + 1}
-        </div>
-        <div class="data-table-wrap">
-          <table>
-            <thead>
-              <tr>${tbl.headers.map(h => `<th>${esc(h)}</th>`).join('')}</tr>
-            </thead>
-            <tbody>
-              ${tbl.rows.map(row =>
-                `<tr>${row.map(c => `<td>${esc(c)}</td>`).join('')}</tr>`
-              ).join('')}
-            </tbody>
-          </table>
-        </div>
-      </div>`).join('');
-  }
-
-  // ── Error banner
-  if (d.error) {
-    document.querySelector('main').insertAdjacentHTML('afterbegin', `
-      <div class="error-box" style="margin-bottom:20px">
-        ⚠ Scraper reported an issue: ${esc(d.error)}
-      </div>`);
-  }
+// ── API panel ─────────────────────────────────────────────────────────────────
+function showApis(apis){
+  if(!apis || !apis.length) return;
+  document.getElementById('api-panel').style.display='';
+  document.getElementById('api-body').innerHTML = apis.slice(0,20).map(a=>`
+    <div class="api-row">
+      <span class="api-status ${a.status===200?'s200':'s4xx'}">${a.status}</span>
+      <span class="api-url">${esc(a.url)}</span>
+    </div>`).join('');
 }
 </script>
 </body>
