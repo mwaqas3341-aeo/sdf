@@ -2,8 +2,8 @@
 """
 fetch.py — SIS PESRP Scraper (Diagnostic & Multithreaded)
 =======================================================================
-TEST MODE: Only processes first 50 schools from inventory.
-Remove the slice `inventory[:50]` in scrape() to run the full dataset.
+TEST MODE: Only processes first 50 schools.
+Remove the `inventory[:50]` slice in scrape() to run the full dataset.
 """
 
 import json
@@ -34,9 +34,15 @@ S.headers.update({
 
 csv_lock = threading.Lock()
 
-# ── Set to True to print raw API response for first school (debug) ──────────
+# ── DEBUG: print raw API payload for the very first school ──────────────────
 DEBUG_FIRST_SCHOOL = True
 _debug_printed = False
+
+# ── Positional fallback: when the API returns no "categories" key,
+#    map array index → grade key using this list.
+#    10 values → grades 1-10.  If you see 11 values, change to:
+#    ["KG","1","2","3","4","5","6","7","8","9","10"]
+POSITIONAL_GRADES = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
 
 FIELDS = [
     "school_id", "emis_code", "school_name", "district_id", "district", "tehsil_id", "tehsil",
@@ -48,30 +54,22 @@ FIELDS = [
 ]
 
 GRADE_MAP = {
-    # KG variants
     "ECE": "KG", "Nursery": "KG", "KG": "KG", "katchi": "KG", "Katchi": "KG",
     "Pre-School": "KG", "Pre School": "KG", "Prep": "KG",
-    # Numbered classes (plain)
     "1": "1", "2": "2", "3": "3", "4": "4", "5": "5",
     "6": "6", "7": "7", "8": "8", "9": "9", "10": "10",
-    # "Class X" variants
     "Class 1": "1", "Class 2": "2", "Class 3": "3", "Class 4": "4", "Class 5": "5",
     "Class 6": "6", "Class 7": "7", "Class 8": "8", "Class 9": "9", "Class 10": "10",
-    # "Grade X" variants
     "Grade 1": "1", "Grade 2": "2", "Grade 3": "3", "Grade 4": "4", "Grade 5": "5",
     "Grade 6": "6", "Grade 7": "7", "Grade 8": "8", "Grade 9": "9", "Grade 10": "10",
 }
 
 
 def to_int(value):
-    if value is None:
-        return 0
-    if isinstance(value, int):
-        return value
-    if isinstance(value, float):
-        return int(value)
+    if value is None: return 0
+    if isinstance(value, int): return value
+    if isinstance(value, float): return int(value)
     if isinstance(value, dict):
-        # Highcharts point: {y: 5, name: "..."} or {value: 5}
         return to_int(value.get("y") or value.get("value") or 0)
     if isinstance(value, str):
         clean = re.sub(r'[^\d]', '', value)
@@ -86,8 +84,7 @@ def get_csrf():
         csrf = S.cookies.get("csrf_cookie_name", "")
         if not csrf:
             m = re.search(r'csrf_cookie_name["\s:\']+([a-f0-9]+)', r.text)
-            if m:
-                csrf = m.group(1)
+            if m: csrf = m.group(1)
         print(f"[Network] CSRF Token received: {csrf[:10]}...", flush=True)
         return csrf
     except Exception as e:
@@ -112,17 +109,14 @@ def parse_options(html_str):
 
 
 def parse_resp(r):
-    if not r or r.status_code != 200:
-        return []
+    if not r or r.status_code != 200: return []
     body = r.text.strip()
-    if not body:
-        return []
+    if not body: return []
     if body.startswith("{"):
         try:
             d = r.json()
             return parse_options(d.get("html") or d.get("data") or d.get("options") or "")
-        except:
-            pass
+        except: pass
     return parse_options(body)
 
 
@@ -171,7 +165,6 @@ def worker_fetch_schools_in_markaz(markaz_info, csrf, ts):
         for g in ["KG", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]:
             base_school[f"grade_{g}_boys"] = 0
             base_school[f"grade_{g}_girls"] = 0
-
         schools_found.append(base_school)
     return schools_found
 
@@ -206,7 +199,6 @@ def worker_fetch_school_data(school_info, ts):
         if r2.status_code == 200:
             data2 = r2.json()
 
-            # ── DEBUG: print raw payload for the very first school ──────────
             if DEBUG_FIRST_SCHOOL and not _debug_printed:
                 _debug_printed = True
                 print("\n" + "=" * 65, flush=True)
@@ -224,7 +216,6 @@ def worker_fetch_school_data(school_info, ts):
                 female_vals = data2.get("female") or data2.get("Female")
 
                 # Strategy B: Highcharts series array ───────────────────────
-                # e.g. {"series": [{"name":"Male","data":[...]}, ...]}
                 if not male_vals and "series" in data2:
                     for series in data2["series"]:
                         name = (series.get("name") or "").strip().lower()
@@ -234,31 +225,36 @@ def worker_fetch_school_data(school_info, ts):
                             female_vals = series.get("data", [])
 
                 # Strategy C: list-of-dicts rows ────────────────────────────
-                # e.g. {"data": [{"class":"1","male":5,"female":3}, ...]}
                 if not male_vals and isinstance(data2.get("data"), list):
                     rows = data2["data"]
                     if rows and isinstance(rows[0], dict):
-                        categories  = [
-                            r.get("class") or r.get("grade") or r.get("category") or r.get("name")
-                            for r in rows
-                        ]
-                        male_vals   = [to_int(r.get("male")   or r.get("boys"))   for r in rows]
-                        female_vals = [to_int(r.get("female") or r.get("girls"))   for r in rows]
+                        categories  = [r.get("class") or r.get("grade") or r.get("category") or r.get("name") for r in rows]
+                        male_vals   = [to_int(r.get("male") or r.get("boys"))   for r in rows]
+                        female_vals = [to_int(r.get("female") or r.get("girls")) for r in rows]
 
-                # ── Write values if any strategy matched ────────────────────
-                if male_vals and female_vals and categories:
-                    for i, cat in enumerate(categories):
+                # ── Write values ────────────────────────────────────────────
+                if male_vals and female_vals:
+                    # Use categories from API if present, else fall back to
+                    # positional mapping (the API omits "categories" entirely).
+                    if categories:
+                        grade_keys = [GRADE_MAP.get(str(c).strip()) for c in categories]
+                    else:
+                        # Positional fallback — pad/trim to actual list length
+                        n = max(len(male_vals), len(female_vals))
+                        grade_keys = POSITIONAL_GRADES[:n]
+                        if n > len(POSITIONAL_GRADES):
+                            # More values than expected — extend with None so we skip extras
+                            grade_keys += [None] * (n - len(POSITIONAL_GRADES))
+
+                    for i, g_key in enumerate(grade_keys):
+                        if g_key is None:
+                            continue
                         if i >= len(male_vals) or i >= len(female_vals):
                             break
-                        g_key = GRADE_MAP.get(str(cat).strip())
-                        if g_key:
-                            school_info[f"grade_{g_key}_boys"]  = to_int(male_vals[i])
-                            school_info[f"grade_{g_key}_girls"] = to_int(female_vals[i])
-                        else:
-                            print(f"[WARN] Unknown grade label '{cat}' for school "
-                                  f"{school_info['school_id']} — add it to GRADE_MAP", flush=True)
+                        school_info[f"grade_{g_key}_boys"]  = to_int(male_vals[i])
+                        school_info[f"grade_{g_key}_girls"] = to_int(female_vals[i])
                 else:
-                    print(f"[WARN] Unrecognised grade structure for school "
+                    print(f"[WARN] No male/female data found for school "
                           f"{school_info['school_id']}: keys={list(data2.keys())}", flush=True)
 
     except Exception as e:
@@ -276,10 +272,8 @@ def worker_fetch_school_data(school_info, ts):
 def scrape():
     ts = datetime.now(timezone.utc).isoformat()
 
-    # 1. CSRF
     csrf = get_csrf()
 
-    # 2. Districts
     print("[Network] Requesting Districts list...", flush=True)
     r = S.get(f"{BASE}/user/get_districts", timeout=15)
     districts = parse_resp(r)
@@ -287,7 +281,6 @@ def scrape():
 
     markaz_list = []
 
-    # 3. Tehsils → Markazs
     print("\nPhase 1a: Mapping Tehsils and Markazs sequentially...", flush=True)
     for d_id, d_name in districts:
         tehsils = get_tehsils(d_id, csrf) or [("", "All")]
@@ -299,7 +292,6 @@ def scrape():
 
     print(f"\n[Success] Mapped exactly {len(markaz_list)} Markazs.", flush=True)
 
-    # 4. School lists from Markazs (concurrent)
     print(f"\nPhase 1b: Fetching school lists across {len(markaz_list)} Markazs concurrently...", flush=True)
     inventory = []
     completed_markazs = 0
@@ -315,17 +307,14 @@ def scrape():
     print(f"\nPhase 1 Complete! Discovered exactly {len(inventory)} schools.", flush=True)
 
     # ── TEST MODE: only process first 50 schools ────────────────────────────
-    # Remove or comment out the line below to run the full dataset.
+    # Remove this line to run the full 38,150 schools.
     test_inventory = inventory[:50]
     print(f"\n[TEST MODE] Limiting to first {len(test_inventory)} schools out of {len(inventory)} total.", flush=True)
     # ────────────────────────────────────────────────────────────────────────
 
-    # Write CSV header
     with open("schools.csv", "w", newline="", encoding="utf-8") as f:
-        w = csv.DictWriter(f, fieldnames=FIELDS)
-        w.writeheader()
+        csv.DictWriter(f, fieldnames=FIELDS).writeheader()
 
-    # 5. Fetch enrollment data (concurrent)
     print("\nPhase 2: Fetching enrollment data concurrently...", flush=True)
     completed_schools = 0
     final_schools = []
@@ -355,29 +344,42 @@ if __name__ == "__main__":
         "source": BASE,
         "test_mode": True,
         "summary": {
-            "total_schools": len(schools),
-            "total_students": tot,
-            "total_boys":    sum(s.get("boys", 0)  for s in schools),
-            "total_girls":   sum(s.get("girls", 0) for s in schools),
-            "total_teachers": sum(s.get("teachers", 0) for s in schools),
+            "total_schools":   len(schools),
+            "total_students":  tot,
+            "total_boys":      sum(s.get("boys", 0)     for s in schools),
+            "total_girls":     sum(s.get("girls", 0)    for s in schools),
+            "total_teachers":  sum(s.get("teachers", 0) for s in schools),
         },
         "schools": schools,
     }
     with open("data.json", "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=2)
 
-    # ── Quick sanity check: how many schools have non-zero grade data? ──────
+    # ── Sanity check ────────────────────────────────────────────────────────
     graded = sum(
         1 for s in schools
         if any(s.get(f"grade_{g}_{sex}", 0) > 0
-               for g in ["1","2","3","4","5","6","7","8","9","10","KG"]
+               for g in ["KG","1","2","3","4","5","6","7","8","9","10"]
                for sex in ["boys","girls"])
     )
     print(f"\n📊 Sanity check: {graded}/{len(schools)} schools have non-zero grade data.", flush=True)
 
+    # ── Sample: show grade breakdown for first school ────────────────────────
+    if schools:
+        s = schools[0]
+        print(f"\n📋 Sample — {s['school_name']} (ID: {s['school_id']})", flush=True)
+        print(f"   Total: {s['total_students']}  Boys: {s['boys']}  Girls: {s['girls']}", flush=True)
+        for g in ["KG","1","2","3","4","5","6","7","8","9","10"]:
+            b = s.get(f"grade_{g}_boys", 0)
+            f_ = s.get(f"grade_{g}_girls", 0)
+            if b or f_:
+                print(f"   Grade {g:>2}: boys={b}  girls={f_}", flush=True)
+
     elapsed = (time.time() - start_time) / 60
-    print(f"✅ Finished in {elapsed:.1f} minutes!", flush=True)
+    print(f"\n✅ Finished in {elapsed:.1f} minutes!", flush=True)
     print(f"   → schools.csv  (rows: {len(schools)})", flush=True)
     print(f"   → data.json", flush=True)
-    print("\nNext step: Check the [DEBUG] raw response above to confirm grade structure.", flush=True)
-    print("If graded > 0, remove the `inventory[:50]` slice to run the full dataset.", flush=True)
+    if graded == len(schools):
+        print("\n✅ All schools have grade data — safe to remove [:50] for full run!", flush=True)
+    else:
+        print(f"\n⚠️  {len(schools)-graded} schools still have zero grade data — check [WARN] lines above.", flush=True)
