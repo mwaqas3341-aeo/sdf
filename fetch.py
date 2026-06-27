@@ -223,47 +223,55 @@ def scrape():
                 print(f"  {t_name}/{m_name}: {len(school_opts)} schools")
 
                 for s_id, s_name in school_opts:
+                    # --- EXTRACT EMIS CODE AND CLEAN SCHOOL NAME ---
+                    emis_code = ""
+                    school_name_clean = s_name
+                    if " - " in s_name:
+                        parts = s_name.split(" - ", 1)
+                        emis_code = parts[0].strip()
+                        school_name_clean = parts[1].strip() if len(parts) > 1 else s_name
+                    # -------------------------------------------------
+
                     enr, csrf = get_enrollment(s_id, d_id, t_id, m_id, csrf)
                     g = enr.get("grades", {})
 
                     schools.append({
-    "school_id": s_id,
-    "emis_code": emis_code,
-    "school_name": s_name,
-    "district_id": d_id,        # <--- ADD THIS
-    "district": d_name,
-    "tehsil_id": t_id,          # <--- ADD THIS
-    "tehsil": t_name,
-    "markaz_id": m_id,          # <--- ADD THIS
-    "markaz": m_name,
+                        "school_id": s_id,
+                        "emis_code": emis_code,
+                        "school_name": school_name_clean,
+                        "district_id": d_id,
+                        "district": d_name,
+                        "tehsil_id": t_id,
+                        "tehsil": t_name,
+                        "markaz_id": m_id,
+                        "markaz": m_name,
                         "total_students": enr.get("total_students", 0),
                         "boys": enr.get("boys", 0),
                         "girls": enr.get("girls", 0),
                         "teachers": enr.get("teachers", 0),
-                        # Grade columns (KG, 1–10)
-                        "grade_KG_boys":    g.get("grade_KG_boys", 0),
-                        "grade_KG_girls":   g.get("grade_KG_girls", 0),
-                        "grade_1_boys":     g.get("grade_1_boys", 0),
-                        "grade_1_girls":    g.get("grade_1_girls", 0),
-                        "grade_2_boys":     g.get("grade_2_boys", 0),
-                        "grade_2_girls":    g.get("grade_2_girls", 0),
-                        "grade_3_boys":     g.get("grade_3_boys", 0),
-                        "grade_3_girls":    g.get("grade_3_girls", 0),
-                        "grade_4_boys":     g.get("grade_4_boys", 0),
-                        "grade_4_girls":    g.get("grade_4_girls", 0),
-                        "grade_5_boys":     g.get("grade_5_boys", 0),
-                        "grade_5_girls":    g.get("grade_5_girls", 0),
-                        "grade_6_boys":     g.get("grade_6_boys", 0),
-                        "grade_6_girls":    g.get("grade_6_girls", 0),
-                        "grade_7_boys":     g.get("grade_7_boys", 0),
-                        "grade_7_girls":    g.get("grade_7_girls", 0),
-                        "grade_8_boys":     g.get("grade_8_boys", 0),
-                        "grade_8_girls":    g.get("grade_8_girls", 0),
-                        "grade_9_boys":     g.get("grade_9_boys", 0),
-                        "grade_9_girls":    g.get("grade_9_girls", 0),
-                        "grade_10_boys":    g.get("grade_10_boys", 0),
-                        "grade_10_girls":   g.get("grade_10_girls", 0),
-                        "etransfer_status": "UNKNOWN",   # you can add e‑transfer logic if needed
+                        "grade_KG_boys": g.get("grade_KG_boys", 0),
+                        "grade_KG_girls": g.get("grade_KG_girls", 0),
+                        "grade_1_boys": g.get("grade_1_boys", 0),
+                        "grade_1_girls": g.get("grade_1_girls", 0),
+                        "grade_2_boys": g.get("grade_2_boys", 0),
+                        "grade_2_girls": g.get("grade_2_girls", 0),
+                        "grade_3_boys": g.get("grade_3_boys", 0),
+                        "grade_3_girls": g.get("grade_3_girls", 0),
+                        "grade_4_boys": g.get("grade_4_boys", 0),
+                        "grade_4_girls": g.get("grade_4_girls", 0),
+                        "grade_5_boys": g.get("grade_5_boys", 0),
+                        "grade_5_girls": g.get("grade_5_girls", 0),
+                        "grade_6_boys": g.get("grade_6_boys", 0),
+                        "grade_6_girls": g.get("grade_6_girls", 0),
+                        "grade_7_boys": g.get("grade_7_boys", 0),
+                        "grade_7_girls": g.get("grade_7_girls", 0),
+                        "grade_8_boys": g.get("grade_8_boys", 0),
+                        "grade_8_girls": g.get("grade_8_girls", 0),
+                        "grade_9_boys": g.get("grade_9_boys", 0),
+                        "grade_9_girls": g.get("grade_9_girls", 0),
+                        "grade_10_boys": g.get("grade_10_boys", 0),
+                        "grade_10_girls": g.get("grade_10_girls", 0),
+                        "etransfer_status": "UNKNOWN",
                         "scraped_at": ts,
                     })
                     time.sleep(0.05)   # polite delay
@@ -276,7 +284,7 @@ def scrape():
 # ----------------------------------------------------------------------
 
 FIELDS = [
-    "school_id","emis_code", "school_name", 
+    "school_id", "emis_code", "school_name", 
     "district_id", "district",    # added district_id
     "tehsil_id", "tehsil",        # added tehsil_id
     "markaz_id", "markaz",        # added markaz_id
