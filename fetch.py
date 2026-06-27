@@ -2,14 +2,16 @@
 """
 fetch.py — SIS PESRP Scraper
 =======================================================================
-Grade mapping logic:
-  - API returns no "categories" key, just positional arrays.
-  - 11 values  →  KG, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
-  - 10 values  →  1, 2, 3, 4, 5, 6, 7, 8, 9, 10
-  - <10 values →  first N grades starting from 1  (e.g. primary-only school)
-  - >11 values →  KG + grades 1 onward (extra grades appended)
+Grade mapping (confirmed from live website screenshot):
+  Chart columns: ECE | Nursery | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
 
-Remove `inventory[:50]` in scrape() for the full 38k-school run.
+  Positional array length → grade keys:
+    12 values  →  ECE, Nursery, 1–10        (full school with both pre-primary)
+    11 values  →  Nursery, 1–10             (no ECE, has Nursery)
+    10 values  →  1–10                      (no pre-primary)
+    <10 values →  1 … n                     (primary-only school)
+
+Remove `inventory[:50]` for the full 38k-school run.
 """
 
 import json
@@ -37,29 +39,44 @@ S.headers.update({
     "X-Requested-With": "XMLHttpRequest",
 })
 
-csv_lock = threading.Lock()
-
+csv_lock   = threading.Lock()
 DEBUG_FIRST_SCHOOL = True
 _debug_printed     = False
 
-# Full ordered grade sequence (KG first, then 1-10)
-ALL_GRADES = ["KG", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
+# Ordered grade sequence exactly as the website shows them
+ALL_GRADES = ["ECE", "Nursery", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
 
 FIELDS = [
-    "school_id", "emis_code", "school_name", "district_id", "district", "tehsil_id", "tehsil",
-    "markaz_id", "markaz", "total_students", "boys", "girls", "teachers",
-    "grade_KG_boys", "grade_KG_girls",
-    "grade_1_boys",  "grade_1_girls",  "grade_2_boys",  "grade_2_girls",
-    "grade_3_boys",  "grade_3_girls",  "grade_4_boys",  "grade_4_girls",
-    "grade_5_boys",  "grade_5_girls",  "grade_6_boys",  "grade_6_girls",
-    "grade_7_boys",  "grade_7_girls",  "grade_8_boys",  "grade_8_girls",
-    "grade_9_boys",  "grade_9_girls",  "grade_10_boys", "grade_10_girls",
+    "school_id", "emis_code", "school_name", "district_id", "district",
+    "tehsil_id", "tehsil", "markaz_id", "markaz",
+    "total_students", "boys", "girls", "teachers",
+    # Pre-primary (separate columns in the site chart)
+    "grade_ECE_boys",     "grade_ECE_girls",
+    "grade_Nursery_boys", "grade_Nursery_girls",
+    # Primary & secondary
+    "grade_1_boys",  "grade_1_girls",
+    "grade_2_boys",  "grade_2_girls",
+    "grade_3_boys",  "grade_3_girls",
+    "grade_4_boys",  "grade_4_girls",
+    "grade_5_boys",  "grade_5_girls",
+    "grade_6_boys",  "grade_6_girls",
+    "grade_7_boys",  "grade_7_girls",
+    "grade_8_boys",  "grade_8_girls",
+    "grade_9_boys",  "grade_9_girls",
+    "grade_10_boys", "grade_10_girls",
     "etransfer_status", "scraped_at",
 ]
 
+# Label → internal grade key  (for when categories ARE returned by the API)
 GRADE_MAP = {
-    "ECE": "KG", "Nursery": "KG", "KG": "KG", "katchi": "KG", "Katchi": "KG",
-    "Pre-School": "KG", "Pre School": "KG", "Prep": "KG",
+    "ECE":        "ECE",
+    "Nursery":    "Nursery",
+    "nursery":    "Nursery",
+    "KG":         "Nursery",   # treat KG as Nursery if labelled
+    "katchi":     "Nursery",
+    "Katchi":     "Nursery",
+    "Pre-School": "Nursery",
+    "Prep":       "Nursery",
     "1": "1",  "2": "2",  "3": "3",  "4": "4",  "5": "5",
     "6": "6",  "7": "7",  "8": "8",  "9": "9",  "10": "10",
     "Class 1": "1",  "Class 2": "2",  "Class 3": "3",
@@ -73,20 +90,30 @@ GRADE_MAP = {
 
 def positional_grade_keys(n):
     """
-    Map array length → ordered grade keys.
-      n == 11  →  KG, 1-10   (school teaches ECE + all primary/secondary)
-      n == 10  →  1-10        (no ECE class)
-      n <  10  →  1 … n       (primary-only or partial school)
-      n >  11  →  KG, 1 … n-1 (unusual; extend gracefully)
+    Map array length → ordered grade key list.
+
+    Website chart order confirmed: ECE, Nursery, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+
+      n == 12  →  ECE, Nursery, 1-10   (both pre-primary classes present)
+      n == 11  →  Nursery, 1-10        (Nursery only, no ECE)
+      n == 10  →  1-10                 (no pre-primary)
+      n  < 10  →  1 … n               (primary-only / partial school)
+      n  > 12  →  ECE, Nursery, 1 …   (graceful extension)
     """
-    if n == 11:
-        return ALL_GRADES[:]                     # KG + 1-10
-    elif n <= 10:
-        return ALL_GRADES[1:1 + n]               # skip KG, take n grades (1…n)
+    primary = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
+
+    if n == 12:
+        return ["ECE", "Nursery"] + primary
+    elif n == 11:
+        return ["Nursery"] + primary
+    elif n == 10:
+        return primary
+    elif n < 10:
+        return primary[:n]
     else:
-        # n > 11: KG + grades 1 onward
-        extras = [str(i) for i in range(11, n)]  # 11, 12, … if ever needed
-        return ALL_GRADES[:] + extras
+        # n > 12: ECE + Nursery + grades 1 onward + extras
+        extras = [str(i) for i in range(11, n - 1)]
+        return ["ECE", "Nursery"] + primary + extras
 
 
 def to_int(value):
@@ -177,13 +204,14 @@ def worker_fetch_schools_in_markaz(markaz_info, csrf, ts):
         emis_code, school_name_clean = "", s_name
         if " - " in s_name:
             parts = s_name.split(" - ", 1)
-            emis_code = parts[0].strip()
+            emis_code         = parts[0].strip()
             school_name_clean = parts[1].strip() if len(parts) > 1 else s_name
 
         base_school = {
             "school_id": s_id, "emis_code": emis_code, "school_name": school_name_clean,
             "district_id": d_id, "district": d_name, "tehsil_id": t_id, "tehsil": t_name,
-            "markaz_id": m_id, "markaz": m_name, "total_students": 0, "boys": 0, "girls": 0,
+            "markaz_id": m_id, "markaz": m_name,
+            "total_students": 0, "boys": 0, "girls": 0,
             "teachers": 0, "etransfer_status": "UNKNOWN", "scraped_at": ts
         }
         for g in ALL_GRADES:
@@ -197,12 +225,12 @@ def worker_fetch_school_data(school_info, ts):
     global _debug_printed
 
     params = {
-        "district":        school_info["district_id"],
-        "tehsil":          school_info["tehsil_id"],
-        "markaz":          school_info["markaz_id"],
-        "school":          school_info["school_id"],
-        "classes":         "",
-        "s_id_emis_code":  ""
+        "district":       school_info["district_id"],
+        "tehsil":         school_info["tehsil_id"],
+        "markaz":         school_info["markaz_id"],
+        "school":         school_info["school_id"],
+        "classes":        "",
+        "s_id_emis_code": ""
     }
 
     # ── 1. Gender summary totals ────────────────────────────────────────────
@@ -253,18 +281,16 @@ def worker_fetch_school_data(school_info, ts):
                     rows = data2["data"]
                     if rows and isinstance(rows[0], dict):
                         categories  = [r.get("class") or r.get("grade") or r.get("category") or r.get("name") for r in rows]
-                        male_vals   = [to_int(r.get("male")   or r.get("boys"))   for r in rows]
-                        female_vals = [to_int(r.get("female") or r.get("girls"))  for r in rows]
+                        male_vals   = [to_int(r.get("male")   or r.get("boys"))  for r in rows]
+                        female_vals = [to_int(r.get("female") or r.get("girls")) for r in rows]
 
-                # ── Resolve grade keys ───────────────────────────────────────
+                # ── Resolve grade keys & write values ────────────────────────
                 if male_vals and female_vals:
                     n = max(len(male_vals), len(female_vals))
 
                     if categories:
-                        # API provided explicit category labels — use them
                         grade_keys = [GRADE_MAP.get(str(c).strip()) for c in categories]
                     else:
-                        # No labels → infer from array length
                         grade_keys = positional_grade_keys(n)
 
                     for i, g_key in enumerate(grade_keys):
@@ -275,18 +301,18 @@ def worker_fetch_school_data(school_info, ts):
                         school_info[f"grade_{g_key}_boys"]  = to_int(male_vals[i])
                         school_info[f"grade_{g_key}_girls"] = to_int(female_vals[i])
 
-                    # Sanity: warn if grade sum doesn't match reported total
+                    # Sanity check: grade sum vs reported total
                     grade_sum = sum(
-                        school_info.get(f"grade_{g}_boys", 0) + school_info.get(f"grade_{g}_girls", 0)
+                        school_info.get(f"grade_{g}_boys",  0) +
+                        school_info.get(f"grade_{g}_girls", 0)
                         for g in ALL_GRADES
                     )
-                    reported  = school_info.get("total_students", 0)
+                    reported = school_info.get("total_students", 0)
                     if reported > 0 and abs(grade_sum - reported) > 5:
                         print(
-                            f"[WARN] Grade sum mismatch for school {school_info['school_id']} "
+                            f"[WARN] Grade sum mismatch — school {school_info['school_id']} "
                             f"({school_info['school_name']}): "
-                            f"grade_sum={grade_sum}, reported_total={reported}, "
-                            f"array_len={n}",
+                            f"grade_sum={grade_sum}, reported={reported}, array_len={n}",
                             flush=True
                         )
                 else:
@@ -319,7 +345,6 @@ def scrape():
     print(f"[Success] Found {len(districts)} Districts.", flush=True)
 
     markaz_list = []
-
     print("\nPhase 1a: Mapping Tehsils and Markazs sequentially...", flush=True)
     for d_id, d_name in districts:
         tehsils = get_tehsils(d_id, csrf) or [("", "All")]
@@ -332,7 +357,7 @@ def scrape():
     print(f"\n[Success] Mapped exactly {len(markaz_list)} Markazs.", flush=True)
 
     print(f"\nPhase 1b: Fetching school lists across {len(markaz_list)} Markazs concurrently...", flush=True)
-    inventory = []
+    inventory        = []
     completed_markazs = 0
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
@@ -345,7 +370,7 @@ def scrape():
 
     print(f"\nPhase 1 Complete! Discovered exactly {len(inventory)} schools.", flush=True)
 
-    # ── TEST MODE: first 50 schools only ────────────────────────────────────
+    # ── TEST MODE: first 50 schools ─────────────────────────────────────────
     # Change to `test_inventory = inventory` for the full run.
     test_inventory = inventory[:50]
     print(f"\n[TEST MODE] Limiting to first {len(test_inventory)} of {len(inventory)} schools.", flush=True)
@@ -358,7 +383,7 @@ def scrape():
     completed_schools = 0
     final_schools     = []
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
         futures = {executor.submit(worker_fetch_school_data, s, ts): s for s in test_inventory}
         for future in concurrent.futures.as_completed(futures):
             completed_schools += 1
@@ -395,18 +420,19 @@ if __name__ == "__main__":
         json.dump(out, f, ensure_ascii=False, indent=2)
 
     # ── Sanity checks ────────────────────────────────────────────────────────
-    graded = sum(
-        1 for s in schools
-        if any(s.get(f"grade_{g}_{sex}", 0) > 0
-               for g in ALL_GRADES for sex in ["boys", "girls"])
-    )
-    kg_schools = sum(
-        1 for s in schools
-        if s.get("grade_KG_boys", 0) > 0 or s.get("grade_KG_girls", 0) > 0
-    )
+    graded      = sum(1 for s in schools if any(
+        s.get(f"grade_{g}_{sex}", 0) > 0
+        for g in ALL_GRADES for sex in ["boys", "girls"]
+    ))
+    ece_schools = sum(1 for s in schools
+                      if s.get("grade_ECE_boys", 0) > 0 or s.get("grade_ECE_girls", 0) > 0)
+    nur_schools = sum(1 for s in schools
+                      if s.get("grade_Nursery_boys", 0) > 0 or s.get("grade_Nursery_girls", 0) > 0)
+
     print(f"\n📊 Sanity check:", flush=True)
     print(f"   {graded}/{len(schools)} schools have non-zero grade data", flush=True)
-    print(f"   {kg_schools}/{len(schools)} schools have KG/ECE students", flush=True)
+    print(f"   {ece_schools}/{len(schools)} schools have ECE students", flush=True)
+    print(f"   {nur_schools}/{len(schools)} schools have Nursery students", flush=True)
 
     # ── Sample printout ───────────────────────────────────────────────────────
     if schools:
@@ -417,7 +443,7 @@ if __name__ == "__main__":
             b  = s.get(f"grade_{g}_boys",  0)
             f_ = s.get(f"grade_{g}_girls", 0)
             if b or f_:
-                print(f"   Grade {g:>2}: boys={b}  girls={f_}", flush=True)
+                print(f"   Grade {g:>7}: boys={b}  girls={f_}", flush=True)
 
     elapsed = (time.time() - start_time) / 60
     print(f"\n✅ Finished in {elapsed:.1f} minutes!", flush=True)
@@ -427,4 +453,4 @@ if __name__ == "__main__":
     if graded == len(schools):
         print("\n✅ Grade data looks good — remove [:50] for the full run!", flush=True)
     else:
-        print(f"\n⚠️  {len(schools)-graded} schools have zero grade data — check [WARN] lines.", flush=True)
+        print(f"\n⚠️  {len(schools)-graded} schools have zero grade data.", flush=True)
