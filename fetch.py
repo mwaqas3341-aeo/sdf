@@ -1,3 +1,4 @@
+cat > /mnt/user-data/outputs/fetch.py << 'PYEOF'
 #!/usr/bin/env python3
 """
 fetch.py — SIS PESRP Scraper
@@ -6,10 +7,10 @@ Grade mapping (confirmed from live website screenshot):
   Chart columns: ECE | Nursery | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
 
   Positional array length → grade keys:
-    12 values  →  ECE, Nursery, 1–10        (full school with both pre-primary)
-    11 values  →  Nursery, 1–10             (no ECE, has Nursery)
-    10 values  →  1–10                      (no pre-primary)
-    <10 values →  1 … n                     (primary-only school)
+    12 values  →  ECE, Nursery, 1–10
+    11 values  →  Nursery, 1–10
+    10 values  →  1–10
+    <10 values →  1 … n
 
 Remove `inventory[:50]` for the full 38k-school run.
 """
@@ -39,21 +40,18 @@ S.headers.update({
     "X-Requested-With": "XMLHttpRequest",
 })
 
-csv_lock   = threading.Lock()
+csv_lock           = threading.Lock()
 DEBUG_FIRST_SCHOOL = True
 _debug_printed     = False
 
-# Ordered grade sequence exactly as the website shows them
 ALL_GRADES = ["ECE", "Nursery", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
 
 FIELDS = [
     "school_id", "emis_code", "school_name", "district_id", "district",
     "tehsil_id", "tehsil", "markaz_id", "markaz",
     "total_students", "boys", "girls", "teachers",
-    # Pre-primary (separate columns in the site chart)
     "grade_ECE_boys",     "grade_ECE_girls",
     "grade_Nursery_boys", "grade_Nursery_girls",
-    # Primary & secondary
     "grade_1_boys",  "grade_1_girls",
     "grade_2_boys",  "grade_2_girls",
     "grade_3_boys",  "grade_3_girls",
@@ -67,16 +65,11 @@ FIELDS = [
     "etransfer_status", "scraped_at",
 ]
 
-# Label → internal grade key  (for when categories ARE returned by the API)
 GRADE_MAP = {
     "ECE":        "ECE",
-    "Nursery":    "Nursery",
-    "nursery":    "Nursery",
-    "KG":         "Nursery",   # treat KG as Nursery if labelled
-    "katchi":     "Nursery",
-    "Katchi":     "Nursery",
-    "Pre-School": "Nursery",
-    "Prep":       "Nursery",
+    "Nursery":    "Nursery", "nursery": "Nursery",
+    "KG":         "Nursery", "katchi":  "Nursery", "Katchi": "Nursery",
+    "Pre-School": "Nursery", "Prep":    "Nursery",
     "1": "1",  "2": "2",  "3": "3",  "4": "4",  "5": "5",
     "6": "6",  "7": "7",  "8": "8",  "9": "9",  "10": "10",
     "Class 1": "1",  "Class 2": "2",  "Class 3": "3",
@@ -89,31 +82,14 @@ GRADE_MAP = {
 
 
 def positional_grade_keys(n):
-    """
-    Map array length → ordered grade key list.
-
-    Website chart order confirmed: ECE, Nursery, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
-
-      n == 12  →  ECE, Nursery, 1-10   (both pre-primary classes present)
-      n == 11  →  Nursery, 1-10        (Nursery only, no ECE)
-      n == 10  →  1-10                 (no pre-primary)
-      n  < 10  →  1 … n               (primary-only / partial school)
-      n  > 12  →  ECE, Nursery, 1 …   (graceful extension)
-    """
-    primary = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
-
-    if n == 12:
-        return ["ECE", "Nursery"] + primary
-    elif n == 11:
-        return ["Nursery"] + primary
-    elif n == 10:
-        return primary
-    elif n < 10:
-        return primary[:n]
+    primary = ["1","2","3","4","5","6","7","8","9","10"]
+    if   n == 12: return ["ECE","Nursery"] + primary
+    elif n == 11: return ["Nursery"] + primary
+    elif n == 10: return primary
+    elif n <  10: return primary[:n]
     else:
-        # n > 12: ECE + Nursery + grades 1 onward + extras
         extras = [str(i) for i in range(11, n - 1)]
-        return ["ECE", "Nursery"] + primary + extras
+        return ["ECE","Nursery"] + primary + extras
 
 
 def to_int(value):
@@ -198,7 +174,6 @@ def get_schools(d_id, t_id, m_id, csrf):
 def worker_fetch_schools_in_markaz(markaz_info, csrf, ts):
     d_id, d_name, t_id, t_name, m_id, m_name = markaz_info
     school_opts = get_schools(d_id, t_id, m_id, csrf)
-
     schools_found = []
     for s_id, s_name in school_opts:
         emis_code, school_name_clean = "", s_name
@@ -206,7 +181,6 @@ def worker_fetch_schools_in_markaz(markaz_info, csrf, ts):
             parts = s_name.split(" - ", 1)
             emis_code         = parts[0].strip()
             school_name_clean = parts[1].strip() if len(parts) > 1 else s_name
-
         base_school = {
             "school_id": s_id, "emis_code": emis_code, "school_name": school_name_clean,
             "district_id": d_id, "district": d_name, "tehsil_id": t_id, "tehsil": t_name,
@@ -219,6 +193,55 @@ def worker_fetch_schools_in_markaz(markaz_info, csrf, ts):
             base_school[f"grade_{g}_girls"] = 0
         schools_found.append(base_school)
     return schools_found
+
+
+def fetch_grade_bar_raw(params):
+    """Return (raw_dict, array_len) for the grade bar endpoint."""
+    r = S.get(f"{BASE}/dashboard_revamp/get_gender_bar_class", params=params, timeout=15)
+    if r.status_code != 200:
+        return None, 0
+    data = r.json()
+    male = data.get("male") or []
+    return data, len(male)
+
+
+def apply_grade_data(school_info, data2):
+    """Parse data2 and write grade values into school_info. Returns True if data was found."""
+    if not isinstance(data2, dict):
+        return False
+
+    categories  = data2.get("categories", [])
+    male_vals   = data2.get("male")   or data2.get("Male")
+    female_vals = data2.get("female") or data2.get("Female")
+
+    if not male_vals and "series" in data2:
+        for series in data2["series"]:
+            name = (series.get("name") or "").strip().lower()
+            if name in ("male","boys","m"):
+                male_vals = series.get("data", [])
+            elif name in ("female","girls","f"):
+                female_vals = series.get("data", [])
+
+    if not male_vals and isinstance(data2.get("data"), list):
+        rows = data2["data"]
+        if rows and isinstance(rows[0], dict):
+            categories  = [r.get("class") or r.get("grade") or r.get("category") or r.get("name") for r in rows]
+            male_vals   = [to_int(r.get("male")   or r.get("boys"))  for r in rows]
+            female_vals = [to_int(r.get("female") or r.get("girls")) for r in rows]
+
+    if not male_vals or not female_vals:
+        return False
+
+    n = max(len(male_vals), len(female_vals))
+    grade_keys = [GRADE_MAP.get(str(c).strip()) for c in categories] if categories else positional_grade_keys(n)
+
+    for i, g_key in enumerate(grade_keys):
+        if g_key is None: continue
+        if i >= len(male_vals) or i >= len(female_vals): break
+        school_info[f"grade_{g_key}_boys"]  = to_int(male_vals[i])
+        school_info[f"grade_{g_key}_girls"] = to_int(female_vals[i])
+
+    return True
 
 
 def worker_fetch_school_data(school_info, ts):
@@ -247,78 +270,33 @@ def worker_fetch_school_data(school_info, ts):
 
     # ── 2. Grade-wise breakdown ─────────────────────────────────────────────
     try:
-        r2 = S.get(f"{BASE}/dashboard_revamp/get_gender_bar_class", params=params, timeout=15)
-        if r2.status_code == 200:
-            data2 = r2.json()
+        data2, n = fetch_grade_bar_raw(params)
 
-            if DEBUG_FIRST_SCHOOL and not _debug_printed:
-                _debug_printed = True
-                print("\n" + "=" * 65, flush=True)
-                print("[DEBUG] Raw grade bar response (first school):", flush=True)
-                print(json.dumps(data2, indent=2)[:1500], flush=True)
-                print("=" * 65 + "\n", flush=True)
+        if DEBUG_FIRST_SCHOOL and not _debug_printed:
+            _debug_printed = True
+            print("\n" + "=" * 65, flush=True)
+            print(f"[DEBUG] Raw grade bar (first school, array_len={n}):", flush=True)
+            print(json.dumps(data2, indent=2)[:1500], flush=True)
+            print("=" * 65 + "\n", flush=True)
 
-            if isinstance(data2, dict):
-                categories  = data2.get("categories", [])
-                male_vals   = None
-                female_vals = None
-
-                # Strategy A: flat "male" / "female" keys ───────────────────
-                male_vals   = data2.get("male")   or data2.get("Male")
-                female_vals = data2.get("female") or data2.get("Female")
-
-                # Strategy B: Highcharts series array ────────────────────────
-                if not male_vals and "series" in data2:
-                    for series in data2["series"]:
-                        name = (series.get("name") or "").strip().lower()
-                        if name in ("male", "boys", "m"):
-                            male_vals = series.get("data", [])
-                        elif name in ("female", "girls", "f"):
-                            female_vals = series.get("data", [])
-
-                # Strategy C: list-of-dicts rows ─────────────────────────────
-                if not male_vals and isinstance(data2.get("data"), list):
-                    rows = data2["data"]
-                    if rows and isinstance(rows[0], dict):
-                        categories  = [r.get("class") or r.get("grade") or r.get("category") or r.get("name") for r in rows]
-                        male_vals   = [to_int(r.get("male")   or r.get("boys"))  for r in rows]
-                        female_vals = [to_int(r.get("female") or r.get("girls")) for r in rows]
-
-                # ── Resolve grade keys & write values ────────────────────────
-                if male_vals and female_vals:
-                    n = max(len(male_vals), len(female_vals))
-
-                    if categories:
-                        grade_keys = [GRADE_MAP.get(str(c).strip()) for c in categories]
-                    else:
-                        grade_keys = positional_grade_keys(n)
-
-                    for i, g_key in enumerate(grade_keys):
-                        if g_key is None:
-                            continue
-                        if i >= len(male_vals) or i >= len(female_vals):
-                            break
-                        school_info[f"grade_{g_key}_boys"]  = to_int(male_vals[i])
-                        school_info[f"grade_{g_key}_girls"] = to_int(female_vals[i])
-
-                    # Sanity check: grade sum vs reported total
-                    grade_sum = sum(
-                        school_info.get(f"grade_{g}_boys",  0) +
-                        school_info.get(f"grade_{g}_girls", 0)
-                        for g in ALL_GRADES
-                    )
-                    reported = school_info.get("total_students", 0)
-                    if reported > 0 and abs(grade_sum - reported) > 5:
-                        print(
-                            f"[WARN] Grade sum mismatch — school {school_info['school_id']} "
-                            f"({school_info['school_name']}): "
-                            f"grade_sum={grade_sum}, reported={reported}, array_len={n}",
-                            flush=True
-                        )
-                else:
+        if data2:
+            ok = apply_grade_data(school_info, data2)
+            if not ok:
+                print(f"[WARN] No male/female data for school {school_info['school_id']}: "
+                      f"keys={list(data2.keys())}", flush=True)
+            else:
+                # Sanity check
+                grade_sum = sum(
+                    school_info.get(f"grade_{g}_boys",  0) +
+                    school_info.get(f"grade_{g}_girls", 0)
+                    for g in ALL_GRADES
+                )
+                reported = school_info.get("total_students", 0)
+                if reported > 0 and abs(grade_sum - reported) > 5:
                     print(
-                        f"[WARN] No male/female data for school {school_info['school_id']}: "
-                        f"keys={list(data2.keys())}",
+                        f"[WARN] Sum mismatch — school {school_info['school_id']} "
+                        f"({school_info['school_name']}): "
+                        f"grade_sum={grade_sum}, reported={reported}, array_len={n}",
                         flush=True
                     )
 
@@ -334,9 +312,80 @@ def worker_fetch_school_data(school_info, ts):
     return school_info
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# ECE/Nursery verification — finds the school from the screenshot by EMIS code
+# and prints its raw API response so we can confirm the 12-value mapping.
+# ═══════════════════════════════════════════════════════════════════════════════
+def verify_ece_school(inventory, csrf):
+    """
+    Search the full inventory for EMIS code 37110221 (the ATTOCK school
+    visible in the user's screenshot that has ECE + Nursery students).
+    Print its raw grade bar response and the mapped result.
+    """
+    TARGET_EMIS = "37110221"
+    match = next((s for s in inventory if s.get("emis_code") == TARGET_EMIS), None)
+
+    if not match:
+        # Fallback: find ANY school in ATTOCK that might have ECE
+        attock = [s for s in inventory if s.get("district","").upper() == "ATTOCK"]
+        print(f"\n[ECE-CHECK] EMIS {TARGET_EMIS} not found. "
+              f"Checking first 10 ATTOCK schools ({len(attock)} total)...", flush=True)
+        candidates = attock[:10]
+    else:
+        print(f"\n[ECE-CHECK] Found EMIS {TARGET_EMIS}: {match['school_name']}", flush=True)
+        candidates = [match]
+
+    for school in candidates:
+        params = {
+            "district":       school["district_id"],
+            "tehsil":         school["tehsil_id"],
+            "markaz":         school["markaz_id"],
+            "school":         school["school_id"],
+            "classes":        "",
+            "s_id_emis_code": ""
+        }
+        try:
+            r = S.get(f"{BASE}/dashboard_revamp/get_gender_bar_class", params=params, timeout=15)
+            data = r.json()
+            male   = data.get("male",   [])
+            female = data.get("female", [])
+            n = len(male)
+
+            print(f"\n[ECE-CHECK] School: {school['school_name']} "
+                  f"(EMIS: {school['emis_code']}, ID: {school['school_id']})", flush=True)
+            print(f"  array_len={n}  →  mapped as: {positional_grade_keys(n)}", flush=True)
+            print(f"  male  : {male}",   flush=True)
+            print(f"  female: {female}", flush=True)
+
+            # Show what we'd write for each grade
+            keys = positional_grade_keys(n)
+            for i, g_key in enumerate(keys):
+                b  = to_int(male[i])   if i < len(male)   else 0
+                f_ = to_int(female[i]) if i < len(female) else 0
+                if b or f_:
+                    print(f"    grade_{g_key:>7}: boys={b}  girls={f_}", flush=True)
+
+            if n in (11, 12):
+                print(f"  ✅ ECE/Nursery detected! array_len={n}", flush=True)
+                break   # found what we needed
+        except Exception as e:
+            print(f"[ECE-CHECK] Error for {school['school_id']}: {e}", flush=True)
+
+
+def parse_resp(r):
+    if not r or r.status_code != 200: return []
+    body = r.text.strip()
+    if not body: return []
+    if body.startswith("{"):
+        try:
+            d = r.json()
+            return parse_options(d.get("html") or d.get("data") or d.get("options") or "")
+        except: pass
+    return parse_options(body)
+
+
 def scrape():
     ts = datetime.now(timezone.utc).isoformat()
-
     csrf = get_csrf()
 
     print("[Network] Requesting Districts list...", flush=True)
@@ -370,7 +419,10 @@ def scrape():
 
     print(f"\nPhase 1 Complete! Discovered exactly {len(inventory)} schools.", flush=True)
 
-    # ── TEST MODE: first 50 schools ─────────────────────────────────────────
+    # ── Verify ECE/Nursery mapping against known school ─────────────────────
+    verify_ece_school(inventory, csrf)
+
+    # ── TEST MODE: first 50 schools ──────────────────────────────────────────
     # Change to `test_inventory = inventory` for the full run.
     test_inventory = inventory[:50]
     print(f"\n[TEST MODE] Limiting to first {len(test_inventory)} of {len(inventory)} schools.", flush=True)
@@ -404,9 +456,7 @@ if __name__ == "__main__":
 
     tot = sum(s.get("total_students", 0) for s in schools)
     out = {
-        "scraped_at": ts,
-        "source":     BASE,
-        "test_mode":  True,
+        "scraped_at": ts, "source": BASE, "test_mode": True,
         "summary": {
             "total_schools":  len(schools),
             "total_students": tot,
@@ -419,22 +469,16 @@ if __name__ == "__main__":
     with open("data.json", "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=2)
 
-    # ── Sanity checks ────────────────────────────────────────────────────────
     graded      = sum(1 for s in schools if any(
-        s.get(f"grade_{g}_{sex}", 0) > 0
-        for g in ALL_GRADES for sex in ["boys", "girls"]
-    ))
-    ece_schools = sum(1 for s in schools
-                      if s.get("grade_ECE_boys", 0) > 0 or s.get("grade_ECE_girls", 0) > 0)
-    nur_schools = sum(1 for s in schools
-                      if s.get("grade_Nursery_boys", 0) > 0 or s.get("grade_Nursery_girls", 0) > 0)
+        s.get(f"grade_{g}_{sex}", 0) > 0 for g in ALL_GRADES for sex in ["boys","girls"]))
+    ece_schools = sum(1 for s in schools if s.get("grade_ECE_boys",0)>0 or s.get("grade_ECE_girls",0)>0)
+    nur_schools = sum(1 for s in schools if s.get("grade_Nursery_boys",0)>0 or s.get("grade_Nursery_girls",0)>0)
 
     print(f"\n📊 Sanity check:", flush=True)
     print(f"   {graded}/{len(schools)} schools have non-zero grade data", flush=True)
     print(f"   {ece_schools}/{len(schools)} schools have ECE students", flush=True)
     print(f"   {nur_schools}/{len(schools)} schools have Nursery students", flush=True)
 
-    # ── Sample printout ───────────────────────────────────────────────────────
     if schools:
         s = schools[0]
         print(f"\n📋 Sample — {s['school_name']} (ID: {s['school_id']})", flush=True)
@@ -449,8 +493,5 @@ if __name__ == "__main__":
     print(f"\n✅ Finished in {elapsed:.1f} minutes!", flush=True)
     print(f"   → schools.csv  (rows: {len(schools)})", flush=True)
     print(f"   → data.json", flush=True)
-
-    if graded == len(schools):
-        print("\n✅ Grade data looks good — remove [:50] for the full run!", flush=True)
-    else:
-        print(f"\n⚠️  {len(schools)-graded} schools have zero grade data.", flush=True)
+PYEOF
+echo "Done"
