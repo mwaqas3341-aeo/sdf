@@ -1,5 +1,5 @@
 {
-  "scraped_at": "2026-06-27T11:30:17.336763+00:00",
+  "scraped_at": "2026-06-27T11:50:58.637194+00:00",
   "source": "https://sis.pesrp.edu.pk",
   "summary": {
     "total_schools": 0,
@@ -9,32 +9,5 @@
     "total_teachers": 0
   },
   "schools": [],
-  "ajax_endpoints": [
-    {
-      "url": "https://maps.googleapis.com/maps/api/mapsjs/gen_204?csp_test=true",
-      "status": 200
-    }
-  ],
-  "endpoints_tried": [
-    "https://sis.pesrp.edu.pk/user/get_markazes",
-    "https://sis.pesrp.edu.pk/str/analysis/get_data",
-    "https://sis.pesrp.edu.pk/str/get_enrollment",
-    "https://sis.pesrp.edu.pk/str/get_districts",
-    "https://sis.pesrp.edu.pk/str/analysis/schools",
-    "https://sis.pesrp.edu.pk/home/stats",
-    "https://sis.pesrp.edu.pk/str/get_markazs",
-    "https://sis.pesrp.edu.pk/user/get_schools",
-    "https://sis.pesrp.edu.pk/api/districts",
-    "https://sis.pesrp.edu.pk/str/analysis/district",
-    "https://sis.pesrp.edu.pk/str/analysis",
-    "https://sis.pesrp.edu.pk/api/schools",
-    "https://sis.pesrp.edu.pk/str/district_data",
-    "https://sis.pesrp.edu.pk/home/get_stats",
-    "https://sis.pesrp.edu.pk/stats/get_school",
-    "https://sis.pesrp.edu.pk/str/stats",
-    "https://sis.pesrp.edu.pk/stats/get_district",
-    "https://sis.pesrp.edu.pk/str/get_school_data",
-    "https://sis.pesrp.edu.pk/str/get_tehsils",
-    "https://sis.pesrp.edu.pk/str/get_schools"
-  ]
+  "captured_endpoints": []
 }
