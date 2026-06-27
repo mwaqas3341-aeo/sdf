@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-fetch.py — SIS PESRP Scraper (Fully Multithreaded Menu & Data Fetching)
+fetch.py — SIS PESRP Scraper (Diagnostic & Multithreaded)
 =======================================================================
 """
 
@@ -18,7 +18,6 @@ from urllib3.util.retry import Retry
 
 BASE = "https://sis.pesrp.edu.pk"
 
-# --- Thread-Safe Session Configuration ---
 S = requests.Session()
 retries = Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503, 504])
 adapter = HTTPAdapter(max_retries=retries, pool_connections=50, pool_maxsize=50)
@@ -26,24 +25,20 @@ S.mount('https://', adapter)
 S.mount('http://', adapter)
 
 S.headers.update({
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
     "Accept": "application/json, text/javascript, */*; q=0.01",
     "X-Requested-With": "XMLHttpRequest",
-    "Referer": f"{BASE}/?tab=district_quota&district=",
 })
 
 csv_lock = threading.Lock()
 
 FIELDS = [
-    "school_id", "emis_code", "school_name",
-    "district_id", "district", "tehsil_id", "tehsil",
+    "school_id", "emis_code", "school_name", "district_id", "district", "tehsil_id", "tehsil",
     "markaz_id", "markaz", "total_students", "boys", "girls", "teachers",
-    "grade_KG_boys", "grade_KG_girls", "grade_1_boys", "grade_1_girls", 
-    "grade_2_boys", "grade_2_girls", "grade_3_boys", "grade_3_girls", 
-    "grade_4_boys", "grade_4_girls", "grade_5_boys", "grade_5_girls", 
-    "grade_6_boys", "grade_6_girls", "grade_7_boys", "grade_7_girls", 
-    "grade_8_boys", "grade_8_girls", "grade_9_boys", "grade_9_girls", 
-    "grade_10_boys", "grade_10_girls", "etransfer_status", "scraped_at",
+    "grade_KG_boys", "grade_KG_girls", "grade_1_boys", "grade_1_girls", "grade_2_boys", "grade_2_girls", 
+    "grade_3_boys", "grade_3_girls", "grade_4_boys", "grade_4_girls", "grade_5_boys", "grade_5_girls", 
+    "grade_6_boys", "grade_6_girls", "grade_7_boys", "grade_7_girls", "grade_8_boys", "grade_8_girls", 
+    "grade_9_boys", "grade_9_girls", "grade_10_boys", "grade_10_girls", "etransfer_status", "scraped_at",
 ]
 
 def to_int(value):
@@ -56,12 +51,18 @@ def to_int(value):
     return 0
 
 def get_csrf():
-    r = S.get(f"{BASE}/str/analysis", timeout=30)
-    csrf = S.cookies.get("csrf_cookie_name", "")
-    if not csrf:
-        m = re.search(r'csrf_cookie_name["\s:\']+([a-f0-9]+)', r.text)
-        if m: csrf = m.group(1)
-    return csrf
+    print("[Network] Requesting CSRF token from server...", flush=True)
+    try:
+        r = S.get(f"{BASE}/str/analysis", timeout=15)
+        csrf = S.cookies.get("csrf_cookie_name", "")
+        if not csrf:
+            m = re.search(r'csrf_cookie_name["\s:\']+([a-f0-9]+)', r.text)
+            if m: csrf = m.group(1)
+        print(f"[Network] CSRF Token received: {csrf[:10]}...", flush=True)
+        return csrf
+    except Exception as e:
+        print(f"[Error] Failed to connect to server: {e}", flush=True)
+        return ""
 
 def parse_options(html_str):
     opts = []
@@ -85,19 +86,16 @@ def parse_resp(r):
         except: pass
     return parse_options(body)
 
-# --- Hierarchy Discovery ---
 def get_tehsils(d_id, csrf):
-    return parse_resp(S.get(f"{BASE}/user/get_tehsils", params={"district": d_id, "selectedTehsil": "false", "all": "All", "csrf_test_name": csrf}, timeout=30))
+    return parse_resp(S.get(f"{BASE}/user/get_tehsils", params={"district": d_id, "selectedTehsil": "false", "all": "All", "csrf_test_name": csrf}, timeout=15))
 
 def get_markazs(d_id, t_id, csrf):
-    return parse_resp(S.get(f"{BASE}/user/get_markazes", params={"tehsil": t_id, "selectedMarkaz": "false", "all": "All", "csrf_test_name": csrf}, timeout=30))
+    return parse_resp(S.get(f"{BASE}/user/get_markazes", params={"tehsil": t_id, "selectedMarkaz": "false", "all": "All", "csrf_test_name": csrf}, timeout=15))
 
 def get_schools(d_id, t_id, m_id, csrf):
-    return parse_resp(S.get(f"{BASE}/user/get_schools", params={"markaz": m_id, "selectedSchool": "false", "all": "All", "csrf_test_name": csrf}, timeout=30))
+    return parse_resp(S.get(f"{BASE}/user/get_schools", params={"markaz": m_id, "selectedSchool": "false", "all": "All", "csrf_test_name": csrf}, timeout=15))
 
-# --- Thread Workers ---
 def worker_fetch_schools_in_markaz(markaz_info, csrf, ts):
-    """Worker to fetch the list of schools for a specific markaz"""
     d_id, d_name, t_id, t_name, m_id, m_name = markaz_info
     school_opts = get_schools(d_id, t_id, m_id, csrf)
     
@@ -120,21 +118,16 @@ def worker_fetch_schools_in_markaz(markaz_info, csrf, ts):
             base_school[f"grade_{g}_girls"] = 0
             
         schools_found.append(base_school)
-        
     return schools_found
 
 def worker_fetch_school_data(school_info, ts):
-    """Worker to fetch enrollment data for a single school"""
     params = {
-        "district": school_info["district_id"],
-        "tehsil": school_info["tehsil_id"],
-        "markaz": school_info["markaz_id"],
-        "school": school_info["school_id"],
+        "district": school_info["district_id"], "tehsil": school_info["tehsil_id"],
+        "markaz": school_info["markaz_id"], "school": school_info["school_id"],
         "classes": "", "s_id_emis_code": ""
     }
-
     try:
-        r1 = S.get(f"{BASE}/dashboard_revamp/get_gender_summary_pie", params=params, timeout=20)
+        r1 = S.get(f"{BASE}/dashboard_revamp/get_gender_summary_pie", params=params, timeout=15)
         if r1.status_code == 200 and isinstance(r1.json(), dict):
             data1 = r1.json()
             school_info["total_students"] = to_int(data1.get("total"))
@@ -143,7 +136,7 @@ def worker_fetch_school_data(school_info, ts):
     except: pass
 
     try:
-        r2 = S.get(f"{BASE}/dashboard_revamp/get_gender_bar_class", params=params, timeout=20)
+        r2 = S.get(f"{BASE}/dashboard_revamp/get_gender_bar_class", params=params, timeout=15)
         if r2.status_code == 200 and isinstance(r2.json(), dict):
             data2 = r2.json()
             categories = data2.get("categories", [])
@@ -159,37 +152,40 @@ def worker_fetch_school_data(school_info, ts):
                     school_info[f"grade_{g_key}_girls"] = female_vals[i]
     except: pass
 
-    # Write to CSV safely
     with csv_lock:
         with open("schools.csv", "a", newline="", encoding="utf-8") as f:
             w = csv.DictWriter(f, fieldnames=FIELDS, extrasaction="ignore")
             w.writerow(school_info)
-
     return school_info
 
-# --- Main Scraper Logic ---
 def scrape():
     ts = datetime.now(timezone.utc).isoformat()
+    
+    # 1. Fetch CSRF
     csrf = get_csrf()
 
-    print("Phase 1a: Mapping Districts, Tehsils, and Markazs...")
-    r = S.get(f"{BASE}/user/get_districts", timeout=30)
+    # 2. Fetch Districts
+    print("[Network] Requesting Districts list...", flush=True)
+    r = S.get(f"{BASE}/user/get_districts", timeout=15)
     districts = parse_resp(r)
+    print(f"[Success] Found {len(districts)} Districts.", flush=True)
     
     markaz_list = []
     
-    # 1. Sequentially map down to the Markaz level (Very fast, ~186 requests)
+    # 3. Map Tehsils and Markazs
+    print("\nPhase 1a: Mapping Tehsils and Markazs sequentially...", flush=True)
     for d_id, d_name in districts:
         tehsils = get_tehsils(d_id, csrf) or [("", "All")]
+        print(f"  -> {d_name}: Found {len(tehsils)} tehsils", flush=True)
         for t_id, t_name in tehsils:
             markazs = get_markazs(d_id, t_id, csrf) or [("", "All")]
             for m_id, m_name in markazs:
                 markaz_list.append((d_id, d_name, t_id, t_name, m_id, m_name))
                 
-    print(f"  -> Found {len(markaz_list)} Markazs.")
+    print(f"\n[Success] Mapped exactly {len(markaz_list)} Markazs.", flush=True)
 
-    # 2. Concurrently fetch school lists for all 3,415 Markazs
-    print(f"\nPhase 1b: Fetching school lists across all {len(markaz_list)} Markazs concurrently...")
+    # 4. Fetch Schools in Markazs Concurrently
+    print(f"\nPhase 1b: Fetching school lists across {len(markaz_list)} Markazs concurrently...", flush=True)
     inventory = []
     completed_markazs = 0
     
@@ -198,18 +194,17 @@ def scrape():
         for future in concurrent.futures.as_completed(futures):
             completed_markazs += 1
             inventory.extend(future.result())
-            if completed_markazs % 500 == 0:
-                print(f"  -> Processed {completed_markazs} / {len(markaz_list)} Markazs...")
+            if completed_markazs % 200 == 0:
+                print(f"  -> Processed {completed_markazs} / {len(markaz_list)} Markazs...", flush=True)
 
-    print(f"\nPhase 1 Complete! Discovered exactly {len(inventory)} schools.")
+    print(f"\nPhase 1 Complete! Discovered exactly {len(inventory)} schools.", flush=True)
     
-    # Initialize the CSV with headers
     with open("schools.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=FIELDS)
         w.writeheader()
 
-    # 3. Concurrently fetch the actual data for the 38k schools
-    print("\nPhase 2: Fetching enrollment data concurrently...")
+    # 5. Fetch Final Data Concurrently
+    print("\nPhase 2: Fetching enrollment data concurrently...", flush=True)
     completed_schools = 0
     final_schools = []
 
@@ -218,20 +213,19 @@ def scrape():
         for future in concurrent.futures.as_completed(futures):
             completed_schools += 1
             final_schools.append(future.result())
-            if completed_schools % 2000 == 0:
-                print(f"  -> Fetched data for {completed_schools} / {len(inventory)} schools...")
+            if completed_schools % 1000 == 0:
+                print(f"  -> Fetched data for {completed_schools} / {len(inventory)} schools...", flush=True)
 
     return final_schools, ts
 
 if __name__ == "__main__":
-    print("=" * 65)
-    print("  SIS PESRP Scraper (Maximum Concurrency Edition)")
-    print("=" * 65)
+    print("=" * 65, flush=True)
+    print("  SIS PESRP Scraper (Diagnostic Edition)", flush=True)
+    print("=" * 65, flush=True)
     start_time = time.time()
     
     schools, ts = scrape()
     
-    # Generate Final JSON
     tot = sum(s.get("total_students", 0) for s in schools)
     out = {
         "scraped_at": ts,
@@ -249,6 +243,4 @@ if __name__ == "__main__":
         json.dump(out, f, ensure_ascii=False, indent=2)
 
     elapsed = (time.time() - start_time) / 60
-    print(f"\n✅ Finished in {elapsed:.1f} minutes!")
-    print(f"schools.csv -> {len(schools)} rows")
-    print(f"data.json   -> {len(schools)} schools | {tot:,} students")
+    print(f"\n✅ Finished in {elapsed:.1f} minutes!", flush=True)
