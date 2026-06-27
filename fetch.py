@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
 """
-fetch.py — SIS PESRP Scraper (Diagnostic & Multithreaded)
+fetch.py — SIS PESRP Scraper
 =======================================================================
-TEST MODE: Only processes first 50 schools.
-Remove the `inventory[:50]` slice in scrape() to run the full dataset.
+Grade mapping logic:
+  - API returns no "categories" key, just positional arrays.
+  - 11 values  →  KG, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+  - 10 values  →  1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+  - <10 values →  first N grades starting from 1  (e.g. primary-only school)
+  - >11 values →  KG + grades 1 onward (extra grades appended)
+
+Remove `inventory[:50]` in scrape() for the full 38k-school run.
 """
 
 import json
@@ -25,7 +31,6 @@ retries = Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503, 504]
 adapter = HTTPAdapter(max_retries=retries, pool_connections=50, pool_maxsize=50)
 S.mount('https://', adapter)
 S.mount('http://', adapter)
-
 S.headers.update({
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
     "Accept": "application/json, text/javascript, */*; q=0.01",
@@ -34,35 +39,54 @@ S.headers.update({
 
 csv_lock = threading.Lock()
 
-# ── DEBUG: print raw API payload for the very first school ──────────────────
 DEBUG_FIRST_SCHOOL = True
-_debug_printed = False
+_debug_printed     = False
 
-# ── Positional fallback: when the API returns no "categories" key,
-#    map array index → grade key using this list.
-#    10 values → grades 1-10.  If you see 11 values, change to:
-#    ["KG","1","2","3","4","5","6","7","8","9","10"]
-POSITIONAL_GRADES = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
+# Full ordered grade sequence (KG first, then 1-10)
+ALL_GRADES = ["KG", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
 
 FIELDS = [
     "school_id", "emis_code", "school_name", "district_id", "district", "tehsil_id", "tehsil",
     "markaz_id", "markaz", "total_students", "boys", "girls", "teachers",
-    "grade_KG_boys", "grade_KG_girls", "grade_1_boys", "grade_1_girls", "grade_2_boys", "grade_2_girls",
-    "grade_3_boys", "grade_3_girls", "grade_4_boys", "grade_4_girls", "grade_5_boys", "grade_5_girls",
-    "grade_6_boys", "grade_6_girls", "grade_7_boys", "grade_7_girls", "grade_8_boys", "grade_8_girls",
-    "grade_9_boys", "grade_9_girls", "grade_10_boys", "grade_10_girls", "etransfer_status", "scraped_at",
+    "grade_KG_boys", "grade_KG_girls",
+    "grade_1_boys",  "grade_1_girls",  "grade_2_boys",  "grade_2_girls",
+    "grade_3_boys",  "grade_3_girls",  "grade_4_boys",  "grade_4_girls",
+    "grade_5_boys",  "grade_5_girls",  "grade_6_boys",  "grade_6_girls",
+    "grade_7_boys",  "grade_7_girls",  "grade_8_boys",  "grade_8_girls",
+    "grade_9_boys",  "grade_9_girls",  "grade_10_boys", "grade_10_girls",
+    "etransfer_status", "scraped_at",
 ]
 
 GRADE_MAP = {
     "ECE": "KG", "Nursery": "KG", "KG": "KG", "katchi": "KG", "Katchi": "KG",
     "Pre-School": "KG", "Pre School": "KG", "Prep": "KG",
-    "1": "1", "2": "2", "3": "3", "4": "4", "5": "5",
-    "6": "6", "7": "7", "8": "8", "9": "9", "10": "10",
-    "Class 1": "1", "Class 2": "2", "Class 3": "3", "Class 4": "4", "Class 5": "5",
-    "Class 6": "6", "Class 7": "7", "Class 8": "8", "Class 9": "9", "Class 10": "10",
-    "Grade 1": "1", "Grade 2": "2", "Grade 3": "3", "Grade 4": "4", "Grade 5": "5",
-    "Grade 6": "6", "Grade 7": "7", "Grade 8": "8", "Grade 9": "9", "Grade 10": "10",
+    "1": "1",  "2": "2",  "3": "3",  "4": "4",  "5": "5",
+    "6": "6",  "7": "7",  "8": "8",  "9": "9",  "10": "10",
+    "Class 1": "1",  "Class 2": "2",  "Class 3": "3",
+    "Class 4": "4",  "Class 5": "5",  "Class 6": "6",
+    "Class 7": "7",  "Class 8": "8",  "Class 9": "9",  "Class 10": "10",
+    "Grade 1": "1",  "Grade 2": "2",  "Grade 3": "3",
+    "Grade 4": "4",  "Grade 5": "5",  "Grade 6": "6",
+    "Grade 7": "7",  "Grade 8": "8",  "Grade 9": "9",  "Grade 10": "10",
 }
+
+
+def positional_grade_keys(n):
+    """
+    Map array length → ordered grade keys.
+      n == 11  →  KG, 1-10   (school teaches ECE + all primary/secondary)
+      n == 10  →  1-10        (no ECE class)
+      n <  10  →  1 … n       (primary-only or partial school)
+      n >  11  →  KG, 1 … n-1 (unusual; extend gracefully)
+    """
+    if n == 11:
+        return ALL_GRADES[:]                     # KG + 1-10
+    elif n <= 10:
+        return ALL_GRADES[1:1 + n]               # skip KG, take n grades (1…n)
+    else:
+        # n > 11: KG + grades 1 onward
+        extras = [str(i) for i in range(11, n)]  # 11, 12, … if ever needed
+        return ALL_GRADES[:] + extras
 
 
 def to_int(value):
@@ -96,12 +120,12 @@ def parse_options(html_str):
     opts = []
     soup = BeautifulSoup(html_str or "", "html.parser")
     skip = {
-        "", "0", "select", "all", "--", "select district", "select tehsil",
-        "select markaz", "select school", "all districts", "all tehsils",
-        "all markazs", "all schools"
+        "", "0", "select", "all", "--",
+        "select district", "select tehsil", "select markaz", "select school",
+        "all districts", "all tehsils", "all markazs", "all schools"
     }
     for opt in soup.find_all("option"):
-        val = (opt.get("value") or "").strip()
+        val  = (opt.get("value") or "").strip()
         name = opt.get_text(strip=True)
         if val and name.lower() not in skip:
             opts.append((val, name))
@@ -162,8 +186,8 @@ def worker_fetch_schools_in_markaz(markaz_info, csrf, ts):
             "markaz_id": m_id, "markaz": m_name, "total_students": 0, "boys": 0, "girls": 0,
             "teachers": 0, "etransfer_status": "UNKNOWN", "scraped_at": ts
         }
-        for g in ["KG", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]:
-            base_school[f"grade_{g}_boys"] = 0
+        for g in ALL_GRADES:
+            base_school[f"grade_{g}_boys"]  = 0
             base_school[f"grade_{g}_girls"] = 0
         schools_found.append(base_school)
     return schools_found
@@ -173,12 +197,12 @@ def worker_fetch_school_data(school_info, ts):
     global _debug_printed
 
     params = {
-        "district": school_info["district_id"],
-        "tehsil":   school_info["tehsil_id"],
-        "markaz":   school_info["markaz_id"],
-        "school":   school_info["school_id"],
-        "classes":  "",
-        "s_id_emis_code": ""
+        "district":        school_info["district_id"],
+        "tehsil":          school_info["tehsil_id"],
+        "markaz":          school_info["markaz_id"],
+        "school":          school_info["school_id"],
+        "classes":         "",
+        "s_id_emis_code":  ""
     }
 
     # ── 1. Gender summary totals ────────────────────────────────────────────
@@ -211,11 +235,11 @@ def worker_fetch_school_data(school_info, ts):
                 male_vals   = None
                 female_vals = None
 
-                # Strategy A: flat "male" / "female" lists ──────────────────
+                # Strategy A: flat "male" / "female" keys ───────────────────
                 male_vals   = data2.get("male")   or data2.get("Male")
                 female_vals = data2.get("female") or data2.get("Female")
 
-                # Strategy B: Highcharts series array ───────────────────────
+                # Strategy B: Highcharts series array ────────────────────────
                 if not male_vals and "series" in data2:
                     for series in data2["series"]:
                         name = (series.get("name") or "").strip().lower()
@@ -224,27 +248,24 @@ def worker_fetch_school_data(school_info, ts):
                         elif name in ("female", "girls", "f"):
                             female_vals = series.get("data", [])
 
-                # Strategy C: list-of-dicts rows ────────────────────────────
+                # Strategy C: list-of-dicts rows ─────────────────────────────
                 if not male_vals and isinstance(data2.get("data"), list):
                     rows = data2["data"]
                     if rows and isinstance(rows[0], dict):
                         categories  = [r.get("class") or r.get("grade") or r.get("category") or r.get("name") for r in rows]
-                        male_vals   = [to_int(r.get("male") or r.get("boys"))   for r in rows]
-                        female_vals = [to_int(r.get("female") or r.get("girls")) for r in rows]
+                        male_vals   = [to_int(r.get("male")   or r.get("boys"))   for r in rows]
+                        female_vals = [to_int(r.get("female") or r.get("girls"))  for r in rows]
 
-                # ── Write values ────────────────────────────────────────────
+                # ── Resolve grade keys ───────────────────────────────────────
                 if male_vals and female_vals:
-                    # Use categories from API if present, else fall back to
-                    # positional mapping (the API omits "categories" entirely).
+                    n = max(len(male_vals), len(female_vals))
+
                     if categories:
+                        # API provided explicit category labels — use them
                         grade_keys = [GRADE_MAP.get(str(c).strip()) for c in categories]
                     else:
-                        # Positional fallback — pad/trim to actual list length
-                        n = max(len(male_vals), len(female_vals))
-                        grade_keys = POSITIONAL_GRADES[:n]
-                        if n > len(POSITIONAL_GRADES):
-                            # More values than expected — extend with None so we skip extras
-                            grade_keys += [None] * (n - len(POSITIONAL_GRADES))
+                        # No labels → infer from array length
+                        grade_keys = positional_grade_keys(n)
 
                     for i, g_key in enumerate(grade_keys):
                         if g_key is None:
@@ -253,9 +274,27 @@ def worker_fetch_school_data(school_info, ts):
                             break
                         school_info[f"grade_{g_key}_boys"]  = to_int(male_vals[i])
                         school_info[f"grade_{g_key}_girls"] = to_int(female_vals[i])
+
+                    # Sanity: warn if grade sum doesn't match reported total
+                    grade_sum = sum(
+                        school_info.get(f"grade_{g}_boys", 0) + school_info.get(f"grade_{g}_girls", 0)
+                        for g in ALL_GRADES
+                    )
+                    reported  = school_info.get("total_students", 0)
+                    if reported > 0 and abs(grade_sum - reported) > 5:
+                        print(
+                            f"[WARN] Grade sum mismatch for school {school_info['school_id']} "
+                            f"({school_info['school_name']}): "
+                            f"grade_sum={grade_sum}, reported_total={reported}, "
+                            f"array_len={n}",
+                            flush=True
+                        )
                 else:
-                    print(f"[WARN] No male/female data found for school "
-                          f"{school_info['school_id']}: keys={list(data2.keys())}", flush=True)
+                    print(
+                        f"[WARN] No male/female data for school {school_info['school_id']}: "
+                        f"keys={list(data2.keys())}",
+                        flush=True
+                    )
 
     except Exception as e:
         print(f"[WARN] grade bar failed for school {school_info['school_id']}: {e}", flush=True)
@@ -306,10 +345,10 @@ def scrape():
 
     print(f"\nPhase 1 Complete! Discovered exactly {len(inventory)} schools.", flush=True)
 
-    # ── TEST MODE: only process first 50 schools ────────────────────────────
-    # Remove this line to run the full 38,150 schools.
+    # ── TEST MODE: first 50 schools only ────────────────────────────────────
+    # Change to `test_inventory = inventory` for the full run.
     test_inventory = inventory[:50]
-    print(f"\n[TEST MODE] Limiting to first {len(test_inventory)} schools out of {len(inventory)} total.", flush=True)
+    print(f"\n[TEST MODE] Limiting to first {len(test_inventory)} of {len(inventory)} schools.", flush=True)
     # ────────────────────────────────────────────────────────────────────────
 
     with open("schools.csv", "w", newline="", encoding="utf-8") as f:
@@ -317,7 +356,7 @@ def scrape():
 
     print("\nPhase 2: Fetching enrollment data concurrently...", flush=True)
     completed_schools = 0
-    final_schools = []
+    final_schools     = []
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
         futures = {executor.submit(worker_fetch_school_data, s, ts): s for s in test_inventory}
@@ -341,36 +380,41 @@ if __name__ == "__main__":
     tot = sum(s.get("total_students", 0) for s in schools)
     out = {
         "scraped_at": ts,
-        "source": BASE,
-        "test_mode": True,
+        "source":     BASE,
+        "test_mode":  True,
         "summary": {
-            "total_schools":   len(schools),
-            "total_students":  tot,
-            "total_boys":      sum(s.get("boys", 0)     for s in schools),
-            "total_girls":     sum(s.get("girls", 0)    for s in schools),
-            "total_teachers":  sum(s.get("teachers", 0) for s in schools),
+            "total_schools":  len(schools),
+            "total_students": tot,
+            "total_boys":     sum(s.get("boys", 0)     for s in schools),
+            "total_girls":    sum(s.get("girls", 0)    for s in schools),
+            "total_teachers": sum(s.get("teachers", 0) for s in schools),
         },
         "schools": schools,
     }
     with open("data.json", "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=2)
 
-    # ── Sanity check ────────────────────────────────────────────────────────
+    # ── Sanity checks ────────────────────────────────────────────────────────
     graded = sum(
         1 for s in schools
         if any(s.get(f"grade_{g}_{sex}", 0) > 0
-               for g in ["KG","1","2","3","4","5","6","7","8","9","10"]
-               for sex in ["boys","girls"])
+               for g in ALL_GRADES for sex in ["boys", "girls"])
     )
-    print(f"\n📊 Sanity check: {graded}/{len(schools)} schools have non-zero grade data.", flush=True)
+    kg_schools = sum(
+        1 for s in schools
+        if s.get("grade_KG_boys", 0) > 0 or s.get("grade_KG_girls", 0) > 0
+    )
+    print(f"\n📊 Sanity check:", flush=True)
+    print(f"   {graded}/{len(schools)} schools have non-zero grade data", flush=True)
+    print(f"   {kg_schools}/{len(schools)} schools have KG/ECE students", flush=True)
 
-    # ── Sample: show grade breakdown for first school ────────────────────────
+    # ── Sample printout ───────────────────────────────────────────────────────
     if schools:
         s = schools[0]
         print(f"\n📋 Sample — {s['school_name']} (ID: {s['school_id']})", flush=True)
         print(f"   Total: {s['total_students']}  Boys: {s['boys']}  Girls: {s['girls']}", flush=True)
-        for g in ["KG","1","2","3","4","5","6","7","8","9","10"]:
-            b = s.get(f"grade_{g}_boys", 0)
+        for g in ALL_GRADES:
+            b  = s.get(f"grade_{g}_boys",  0)
             f_ = s.get(f"grade_{g}_girls", 0)
             if b or f_:
                 print(f"   Grade {g:>2}: boys={b}  girls={f_}", flush=True)
@@ -379,7 +423,8 @@ if __name__ == "__main__":
     print(f"\n✅ Finished in {elapsed:.1f} minutes!", flush=True)
     print(f"   → schools.csv  (rows: {len(schools)})", flush=True)
     print(f"   → data.json", flush=True)
+
     if graded == len(schools):
-        print("\n✅ All schools have grade data — safe to remove [:50] for full run!", flush=True)
+        print("\n✅ Grade data looks good — remove [:50] for the full run!", flush=True)
     else:
-        print(f"\n⚠️  {len(schools)-graded} schools still have zero grade data — check [WARN] lines above.", flush=True)
+        print(f"\n⚠️  {len(schools)-graded} schools have zero grade data — check [WARN] lines.", flush=True)
