@@ -262,7 +262,7 @@ def scrape():
                         "etransfer_status": "UNKNOWN",   # you can add e‑transfer logic if needed
                         "scraped_at": ts,
                     })
-                    time.sleep(0.2)   # polite delay
+                    time.sleep(0.05)   # polite delay
 
     return schools, ts
 
