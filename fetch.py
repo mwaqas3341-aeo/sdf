@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """
-fetch.py — SIS PESRP Scraper (HAR‑corrected + retry)
-======================================================
-Adds retry logic and longer timeout to handle server slowness.
+fetch.py — SIS PESRP Scraper (HAR‑corrected + retry + safe number parsing)
+=======================================================================
 """
 
 import json
@@ -28,6 +27,25 @@ S.headers.update({
     "X-Requested-With": "XMLHttpRequest",
     "Referer": f"{BASE}/?tab=district_quota&district=",
 })
+
+
+def to_int(value):
+    """
+    Safely convert a value to an integer.
+    Handles strings with commas, integers, floats, and None.
+    """
+    if value is None:
+        return 0
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        # Remove commas, spaces, and convert
+        clean = re.sub(r'[^\d]', '', value)
+        if clean:
+            return int(clean)
+    return 0
 
 
 def get_csrf():
@@ -114,7 +132,7 @@ def get_schools(d_id, t_id, m_id, csrf):
 
 
 # ----------------------------------------------------------------------
-# Enrollment data – with per-request retry wrapper
+# Enrollment data – with safe number conversion
 # ----------------------------------------------------------------------
 
 def get_enrollment(s_id, d_id, t_id, m_id, csrf):
@@ -146,9 +164,9 @@ def get_enrollment(s_id, d_id, t_id, m_id, csrf):
                 if r and r.status_code == 200:
                     data = r.json()
                     if endpoint.endswith("get_gender_summary_pie"):
-                        enr["total_students"] = int(data.get("total", "0").replace(",", ""))
-                        enr["boys"] = int(data.get("male_count", "0").replace(",", ""))
-                        enr["girls"] = int(data.get("female_count", "0").replace(",", ""))
+                        enr["total_students"] = to_int(data.get("total"))
+                        enr["boys"] = to_int(data.get("male_count"))
+                        enr["girls"] = to_int(data.get("female_count"))
                     else:  # gender_bar_class
                         categories = data.get("categories", [])
                         male_vals = data.get("male", [])
@@ -174,7 +192,7 @@ def get_enrollment(s_id, d_id, t_id, m_id, csrf):
                 print(f"  ⚠️  {endpoint} timeout (attempt {attempt+1}): {e}")
                 if attempt == 2:
                     print(f"  ❌ Skipping school {s_id} after 3 failed attempts")
-                time.sleep(2 ** attempt)  # exponential backoff
+                time.sleep(2 ** attempt)
 
     return enr, csrf
 
@@ -260,7 +278,7 @@ def scrape():
                         "etransfer_status": "UNKNOWN",
                         "scraped_at": ts,
                     })
-                    time.sleep(0.1)   # slightly longer delay
+                    time.sleep(0.1)
 
     return schools, ts
 
@@ -318,7 +336,7 @@ def save(schools, ts):
 
 if __name__ == "__main__":
     print("=" * 50)
-    print("  SIS PESRP Scraper (HAR‑corrected + retry)")
+    print("  SIS PESRP Scraper (HAR‑corrected + retry + safe int)")
     print("=" * 50)
     schools, ts = scrape()
     print(f"\nTotal: {len(schools)} schools")
