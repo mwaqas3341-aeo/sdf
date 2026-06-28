@@ -41,4 +41,15 @@ jobs:
           git add data/
           git diff --cached --quiet || git commit -m \
             "scrape: $(date -u +'%Y-%m-%d %H:%M UTC')"
-          git push
+
+          # The scrape takes 20-30 minutes, so main may have moved on (a manual
+          # commit, a deleted file, etc.) since this job's checkout. Rebase our
+          # data/ commit onto the latest remote history before pushing, and
+          # retry a few times in case of another late push.
+          for i in 1 2 3 4 5; do
+            git rebase --abort 2>/dev/null || true
+            git fetch origin main
+            git rebase origin/main && git push origin main && break
+            echo "Push attempt $i failed or rebase conflicted, retrying..."
+            sleep 10
+          done
