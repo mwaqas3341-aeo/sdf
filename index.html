@@ -180,6 +180,7 @@ input:disabled,select:disabled{opacity:.55;cursor:not-allowed}
 }
 .dt-b{color:#1254a0!important;font-weight:600}
 .dt-g{color:#a01515!important;font-weight:600}
+.dt-ct{color:#0b4a28!important;font-weight:600}
 .dt-sub{
   background:#dff0e8!important;
   color:#063e1e!important;
@@ -266,6 +267,13 @@ input:disabled,select:disabled{opacity:.55;cursor:not-allowed}
       <div class="cl2">🏘 Markaz</div>
       <select id="sm" disabled><option value="">All Markaz</option></select>
     </div>
+    <div class="cg">
+      <div class="cl2">📊 Class Columns</div>
+      <select id="vm" onchange="onViewModeChange()" disabled>
+        <option value="bg">Boys / Girls per Class</option>
+        <option value="total">Class Total Only</option>
+      </select>
+    </div>
     <button class="btn btn-g" onclick="runFilterButton()" id="btnFilter" disabled>🔎 Filter</button>
     <button class="btn btn-b" onclick="exportExcel()"    id="btnExport" disabled>⬇ Export Excel</button>
   </div>
@@ -290,6 +298,7 @@ input:disabled,select:disabled{opacity:.55;cursor:not-allowed}
 let INDEX = null, ALL = [], FLT = [], PG = 1, PER = 100, SORT = 'tot_d';
 let appliedTehsil = '', appliedMarkaz = '';
 let DETAILED = false;   // true → show per-grade landscape table
+let VIEW_MODE = 'bg';   // 'bg' = boys/girls per class, 'total' = class total only
 
 /* ═══════════════════════════════════════════════════════════════════
    UTILITIES
@@ -498,7 +507,7 @@ function populateMarkaz(tehsil) {
 }
 
 function setControlsEnabled(on) {
-  ['st', 'sm', 'btnFilter', 'btnExport'].forEach(id => {
+  ['st', 'sm', 'vm', 'btnFilter', 'btnExport'].forEach(id => {
     document.getElementById(id).disabled = !on;
   });
 }
@@ -511,6 +520,14 @@ function runFilterButton() {
   appliedMarkaz = document.getElementById('sm').value;
   DETAILED = true;   // switch to landscape per-grade view
   recompute();
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   VIEW MODE TOGGLE  (B/G per class  ⇆  Class total only)
+   ═══════════════════════════════════════════════════════════════════ */
+function onViewModeChange() {
+  VIEW_MODE = document.getElementById('vm').value;
+  if (DETAILED) drawDetailed();   // redraw immediately if already in detailed view
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -654,23 +671,25 @@ function drawDetailed() {
     return;
   }
 
-  const allGrades = [...gradeSet].sort((a, b) => gradeIdx(a) - gradeIdx(b));
-  const sections  = buildSections(allGrades);
+  const allGrades    = [...gradeSet].sort((a, b) => gradeIdx(a) - gradeIdx(b));
+  const sections     = buildSections(allGrades);
+  const isTotal       = VIEW_MODE === 'total';   // class-total-only mode?
+  const perGradeCols  = isTotal ? 1 : 2;         // 1 col (Total) vs 2 cols (B,G)
+  const headerRowSpan = isTotal ? 2 : 3;         // 2 header rows in total mode, 3 in B/G mode
 
   /* ── compute total column count for colgroup ─────────────────── */
-  // 2 (EMIS+Name) + Σ(sec.grades*2+1) + 3 (totB,totG,gTot)
-  const gradeColCount = sections.reduce((s, sec) => s + sec.grades.length * 2 + 1, 0);
+  // 2 (EMIS+Name) + Σ(sec.grades*perGradeCols+1) + 3 (totB,totG,gTot)
+  const gradeColCount = sections.reduce((s, sec) => s + sec.grades.length * perGradeCols + 1, 0);
   const totalCols     = 2 + gradeColCount + 3;
 
   /* ── column widths ───────────────────────────────────────────── */
-  // EMIS: 55px, Name: 120px, grade-B/G: 22px each, subtot: 28px,
-  // totB/totG: 32px, gTot: 36px
   let colgroup = '<colgroup>';
   colgroup += `<col style="width:55px">`;   // EMIS
   colgroup += `<col style="width:120px">`;  // Name
   sections.forEach(sec => {
     sec.grades.forEach(() => {
-      colgroup += `<col style="width:22px"><col style="width:22px">`;
+      if (isTotal) colgroup += `<col style="width:30px">`;
+      else         colgroup += `<col style="width:22px"><col style="width:22px">`;
     });
     colgroup += `<col style="width:28px">`;
   });
@@ -679,34 +698,38 @@ function drawDetailed() {
 
   /* ── HEADER ROW 1  (section banners + fixed cols) ────────────── */
   let h1 = `
-    <th rowspan="3" class="dt-h-fix">EMIS CODE</th>
-    <th rowspan="3" class="dt-h-fix" style="text-align:left;padding-left:4px">NAME OF SCHOOL</th>`;
+    <th rowspan="${headerRowSpan}" class="dt-h-fix">EMIS CODE</th>
+    <th rowspan="${headerRowSpan}" class="dt-h-fix" style="text-align:left;padding-left:4px">NAME OF SCHOOL</th>`;
   sections.forEach(sec => {
-    const span = sec.grades.length * 2 + 1;
+    const span = sec.grades.length * perGradeCols + 1;
     h1 += `<th colspan="${span}" class="dt-h-sec">${esc(sec.label)}</th>`;
   });
   h1 += `
-    <th rowspan="3" class="dt-h-totb">TOTAL<br>BOYS</th>
-    <th rowspan="3" class="dt-h-totg">TOTAL<br>GIRLS</th>
-    <th rowspan="3" class="dt-h-gtot">GRAND<br>TOTAL</th>`;
+    <th rowspan="${headerRowSpan}" class="dt-h-totb">TOTAL<br>BOYS</th>
+    <th rowspan="${headerRowSpan}" class="dt-h-totg">TOTAL<br>GIRLS</th>
+    <th rowspan="${headerRowSpan}" class="dt-h-gtot">GRAND<br>TOTAL</th>`;
 
   /* ── HEADER ROW 2  (grade names, section subtotal) ───────────── */
   let h2 = '';
   sections.forEach(sec => {
     sec.grades.forEach(g => {
-      h2 += `<th colspan="2" class="dt-h-grade">${esc(g)}</th>`;
+      h2 += isTotal
+        ? `<th class="dt-h-grade">${esc(g)}</th>`
+        : `<th colspan="2" class="dt-h-grade">${esc(g)}</th>`;
     });
-    h2 += `<th rowspan="2" class="dt-h-sub">${esc(sec.subLabel)}</th>`;
+    h2 += `<th rowspan="${isTotal ? 1 : 2}" class="dt-h-sub">${esc(sec.subLabel)}</th>`;
   });
 
-  /* ── HEADER ROW 3  (B / G labels) ───────────────────────────── */
+  /* ── HEADER ROW 3  (B / G labels — B/G mode only) ─────────────── */
   let h3 = '';
-  sections.forEach(sec => {
-    sec.grades.forEach(() => {
-      h3 += `<th class="dt-h-bg">B</th><th class="dt-h-bg">G</th>`;
+  if (!isTotal) {
+    sections.forEach(sec => {
+      sec.grades.forEach(() => {
+        h3 += `<th class="dt-h-bg">B</th><th class="dt-h-bg">G</th>`;
+      });
+      // subtotal cell already covered by rowspan=2 above
     });
-    // subtotal cell already covered by rowspan=2 above
-  });
+  }
 
   /* ── ACCUMULATORS ────────────────────────────────────────────── */
   const gradeTot = {}; // grade → {b, g}
@@ -724,8 +747,13 @@ function drawDetailed() {
       sec.grades.forEach(g => {
         const b  = gradeVal(r, g, 'b');
         const gv = gradeVal(r, g, 'g');
-        cells += `<td class="dt-b">${b  || ''}</td>`;
-        cells += `<td class="dt-g">${gv || ''}</td>`;
+        if (isTotal) {
+          const t = b + gv;
+          cells += `<td class="dt-ct">${t || ''}</td>`;
+        } else {
+          cells += `<td class="dt-b">${b  || ''}</td>`;
+          cells += `<td class="dt-g">${gv || ''}</td>`;
+        }
         secSum += b + gv;
         gradeTot[g].b += b;
         gradeTot[g].g += gv;
@@ -748,8 +776,12 @@ function drawDetailed() {
   let foot = `<td colspan="2" class="dt-f-label">GRAND TOTAL</td>`;
   sections.forEach((sec, si) => {
     sec.grades.forEach(g => {
-      foot += `<td class="dt-f-b">${fmt(gradeTot[g].b)}</td>`;
-      foot += `<td class="dt-f-g">${fmt(gradeTot[g].g)}</td>`;
+      if (isTotal) {
+        foot += `<td class="dt-f-b">${fmt(gradeTot[g].b + gradeTot[g].g)}</td>`;
+      } else {
+        foot += `<td class="dt-f-b">${fmt(gradeTot[g].b)}</td>`;
+        foot += `<td class="dt-f-g">${fmt(gradeTot[g].g)}</td>`;
+      }
     });
     foot += `<td class="dt-f-sub">${fmt(secTot[si])}</td>`;
   });
@@ -760,8 +792,9 @@ function drawDetailed() {
   /* ── LEGEND ──────────────────────────────────────────────────── */
   const legend = `
     <div class="dt-legend">
-      <span><span class="dt-leg-dot" style="background:#1254a0"></span>Boys (B)</span>
-      <span><span class="dt-leg-dot" style="background:#a01515"></span>Girls (G)</span>
+      ${isTotal ? '' : `<span><span class="dt-leg-dot" style="background:#1254a0"></span>Boys (B)</span>
+      <span><span class="dt-leg-dot" style="background:#a01515"></span>Girls (G)</span>`}
+      ${isTotal ? `<span><span class="dt-leg-dot" style="background:#0b4a28"></span>Class Total</span>` : ''}
       <span><span class="dt-leg-dot" style="background:#2d5a1b"></span>Section Total</span>
       <span><span class="dt-leg-dot" style="background:#0d3d7a"></span>Total Boys</span>
       <span><span class="dt-leg-dot" style="background:#7a0d0d"></span>Total Girls</span>
@@ -781,7 +814,7 @@ function drawDetailed() {
         <thead>
           <tr>${h1}</tr>
           <tr>${h2}</tr>
-          <tr>${h3}</tr>
+          ${isTotal ? '' : `<tr>${h3}</tr>`}
         </thead>
         <tbody>${rows}</tbody>
         <tfoot><tr>${foot}</tr></tfoot>
@@ -790,13 +823,13 @@ function drawDetailed() {
     ${legend}`;
 
   document.getElementById('rc').textContent =
-    `${fmt(FLT.length)} school${FLT.length !== 1 ? 's' : ''} · ${allGrades.length} grades · detailed view`;
+    `${fmt(FLT.length)} school${FLT.length !== 1 ? 's' : ''} · ${allGrades.length} grades · ${isTotal ? 'class total' : 'detailed'} view`;
 
   setCards(FLT.length, grandB, grandG);
   document.getElementById('cs0').textContent = 'Currently filtered';
 
   /* store for export */
-  window._detailExport = { sections, allGrades, gradeTot, secTot, grandB, grandG };
+  window._detailExport = { sections, allGrades, gradeTot, secTot, grandB, grandG, isTotal };
 }
 
 function resetToSimple() {
@@ -840,75 +873,77 @@ function exportSimple(dist) {
 
 /* ── Detailed export (landscape, per-grade) ─────────────────────── */
 function exportDetailed(dist) {
-  const { sections, allGrades, gradeTot, secTot, grandB, grandG } = window._detailExport;
+  const { sections, allGrades, gradeTot, secTot, grandB, grandG, isTotal } = window._detailExport;
+  const perGradeCols = isTotal ? 1 : 2;
 
   /* calculate total column count */
-  const gradeColCount = sections.reduce((s, sec) => s + sec.grades.length * 2 + 1, 0);
-  const totalCols = 2 + gradeColCount + 3;
-  const emptyRow  = () => new Array(totalCols).fill('');
+  const gradeColCount = sections.reduce((s, sec) => s + sec.grades.length * perGradeCols + 1, 0);
+  const totalCols     = 2 + gradeColCount + 3;
+  const emptyRow       = () => new Array(totalCols).fill('');
+  const lastHeaderRow  = isTotal ? 1 : 2;   // 0-indexed row count of the last header row
 
-  /* --- build 3-row header + data using merge tracking --- */
+  /* --- build header + data using merge tracking --- */
   const aoa    = [];
   const merges = [];
 
   /* Row 0 — section banners */
   const r0 = emptyRow();
-  r0[0] = 'EMIS CODE';   merges.push({ s:{r:0,c:0}, e:{r:2,c:0} });
-  r0[1] = 'NAME OF SCHOOL'; merges.push({ s:{r:0,c:1}, e:{r:2,c:1} });
+  r0[0] = 'EMIS CODE';      merges.push({ s:{r:0,c:0}, e:{r:lastHeaderRow,c:0} });
+  r0[1] = 'NAME OF SCHOOL'; merges.push({ s:{r:0,c:1}, e:{r:lastHeaderRow,c:1} });
 
   let c = 2;
-  sections.forEach((sec, si) => {
+  sections.forEach(sec => {
     const secStart = c;
-    r0[c] = sec.label;
-    sec.grades.forEach(g => {
-      // grade name spans 2 cols (B+G)
-      c += 2;
-    });
+    sec.grades.forEach(() => { c += perGradeCols; });
     // subtotal
     c++;
     merges.push({ s:{r:0,c:secStart}, e:{r:0,c:c-1} }); // section span in row 0
   });
   const totBCol = c, totGCol = c + 1, gTotCol = c + 2;
-  r0[totBCol] = 'TOTAL BOYS';   merges.push({ s:{r:0,c:totBCol}, e:{r:2,c:totBCol} });
-  r0[totGCol] = 'TOTAL GIRLS';  merges.push({ s:{r:0,c:totGCol}, e:{r:2,c:totGCol} });
-  r0[gTotCol] = 'GRAND TOTAL';  merges.push({ s:{r:0,c:gTotCol}, e:{r:2,c:gTotCol} });
+  r0[totBCol] = 'TOTAL BOYS';   merges.push({ s:{r:0,c:totBCol}, e:{r:lastHeaderRow,c:totBCol} });
+  r0[totGCol] = 'TOTAL GIRLS';  merges.push({ s:{r:0,c:totGCol}, e:{r:lastHeaderRow,c:totGCol} });
+  r0[gTotCol] = 'GRAND TOTAL';  merges.push({ s:{r:0,c:gTotCol}, e:{r:lastHeaderRow,c:gTotCol} });
 
-  /* Row 1 — grade names */
+  /* Row 1 — grade names (+ section subtotal label) */
   const r1 = emptyRow();
   c = 2;
-  sections.forEach((sec, si) => {
+  sections.forEach(sec => {
     sec.grades.forEach(g => {
       r1[c] = g;
-      merges.push({ s:{r:1,c:c}, e:{r:1,c:c+1} }); // grade name colspan=2
-      c += 2;
+      if (!isTotal) merges.push({ s:{r:1,c:c}, e:{r:1,c:c+1} }); // grade name colspan=2 in B/G mode
+      c += perGradeCols;
     });
     r1[c] = sec.subLabel;
-    merges.push({ s:{r:1,c:c}, e:{r:2,c:c} }); // subtotal rowspan=2
+    if (!isTotal) merges.push({ s:{r:1,c:c}, e:{r:2,c:c} }); // subtotal rowspan=2 in B/G mode
     c++;
   });
 
-  /* Row 2 — B / G labels */
-  const r2 = emptyRow();
-  c = 2;
-  sections.forEach(sec => {
-    sec.grades.forEach(() => {
-      r2[c] = 'Boys'; r2[c + 1] = 'Girls';
-      c += 2;
-    });
-    c++; // skip subtotal (rowspan from row 1)
-  });
+  aoa.push(r0, r1);
 
-  aoa.push(r0, r1, r2);
+  /* Row 2 — B / G labels (B/G mode only) */
+  if (!isTotal) {
+    const r2 = emptyRow();
+    c = 2;
+    sections.forEach(sec => {
+      sec.grades.forEach(() => {
+        r2[c] = 'Boys'; r2[c + 1] = 'Girls';
+        c += 2;
+      });
+      c++; // skip subtotal (rowspan from row 1)
+    });
+    aoa.push(r2);
+  }
 
   /* Data rows */
   FLT.forEach(r => {
     const row = [r.emis_code || '', r.school_name || ''];
-    sections.forEach((sec, si) => {
+    sections.forEach(sec => {
       let secSum = 0;
       sec.grades.forEach(g => {
         const b  = gradeVal(r, g, 'b');
         const gv = gradeVal(r, g, 'g');
-        row.push(b || 0, gv || 0);
+        if (isTotal) row.push((b + gv) || 0);
+        else         row.push(b || 0, gv || 0);
         secSum += b + gv;
       });
       row.push(secSum || 0);
@@ -922,7 +957,8 @@ function exportDetailed(dist) {
   const footRow = ['GRAND TOTAL', ''];
   sections.forEach((sec, si) => {
     sec.grades.forEach(g => {
-      footRow.push(gradeTot[g].b || 0, gradeTot[g].g || 0);
+      if (isTotal) footRow.push((gradeTot[g].b + gradeTot[g].g) || 0);
+      else         footRow.push(gradeTot[g].b || 0, gradeTot[g].g || 0);
     });
     footRow.push(secTot[si] || 0);
   });
@@ -936,7 +972,10 @@ function exportDetailed(dist) {
   /* Column widths */
   const colWidths = [{ wch: 12 }, { wch: 28 }];
   sections.forEach(sec => {
-    sec.grades.forEach(() => { colWidths.push({ wch: 7 }, { wch: 7 }); });
+    sec.grades.forEach(() => {
+      if (isTotal) colWidths.push({ wch: 9 });
+      else         colWidths.push({ wch: 7 }, { wch: 7 });
+    });
     colWidths.push({ wch: 11 });
   });
   colWidths.push({ wch: 13 }, { wch: 13 }, { wch: 13 });
@@ -953,7 +992,7 @@ function exportDetailed(dist) {
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Grade Enrollment');
-  XLSX.writeFile(wb, `sis_pesrp_detailed_${_slug(dist)}_${_today()}.xlsx`);
+  XLSX.writeFile(wb, `sis_pesrp_detailed_${isTotal ? 'classtotal_' : ''}${_slug(dist)}_${_today()}.xlsx`);
 }
 
 const _slug  = s => s.replace(/[^a-z0-9]+/gi, '_').toLowerCase();
