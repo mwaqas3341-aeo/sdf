@@ -250,13 +250,16 @@ def scrape():
     districts = parse_resp(r)
     print(f"[Success] Found {len(districts)} Districts.", flush=True)
 
-    # Phase 1a: map all markazs concurrently per district
+    # Phase 1a: map all markazs SEQUENTIALLY (concurrent caused missing markazs)
     markaz_list = []
-    print("\nPhase 1a: Mapping Tehsils and Markazs concurrently...", flush=True)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=50) as executor:
-        futures = {executor.submit(worker_map_district, d, csrf): d for d in districts}
-        for future in concurrent.futures.as_completed(futures):
-            markaz_list.extend(future.result())
+    print("\nPhase 1a: Mapping Tehsils and Markazs sequentially...", flush=True)
+    for d_id, d_name in districts:
+        tehsils = get_tehsils(d_id, csrf) or [("", "All")]
+        print(f"  -> {d_name}: Found {len(tehsils)} tehsils", flush=True)
+        for t_id, t_name in tehsils:
+            markazs = get_markazs(d_id, t_id, csrf) or [("", "All")]
+            for m_id, m_name in markazs:
+                markaz_list.append((d_id, d_name, t_id, t_name, m_id, m_name))
     print(f"[Success] Mapped {len(markaz_list)} Markazs.", flush=True)
 
     # Phase 1b: get school lists
