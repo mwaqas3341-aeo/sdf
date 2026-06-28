@@ -47,17 +47,21 @@ main{max-width:1300px;margin:18px auto;padding:0 20px 60px}
 /* controls */
 .ctrl{background:var(--s);border:1px solid var(--bd);border-radius:8px;
   padding:12px 16px;margin-bottom:14px;display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}
-.cg{display:flex;flex-direction:column;gap:3px;flex:1;min-width:130px}
+.cg{display:flex;flex-direction:column;gap:3px;flex:1;min-width:160px}
 .cl2{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--mt)}
 input,select{padding:7px 10px;border:1px solid var(--bd);border-radius:5px;
   font-size:13px;color:var(--tx);background:var(--bg);width:100%;font-family:inherit;transition:.15s}
 input:focus,select:focus{outline:none;border-color:var(--g);background:#fff;box-shadow:0 0 0 3px var(--gl)}
+input:disabled,select:disabled{opacity:.55;cursor:not-allowed}
 .btn{padding:7px 13px;border-radius:5px;font-size:12px;font-weight:600;
   cursor:pointer;border:1px solid;white-space:nowrap;transition:.15s;font-family:inherit}
+.btn:disabled{opacity:.4;cursor:not-allowed}
 .btn-r{background:var(--rl);color:var(--r);border-color:var(--r)}
 .btn-r:hover{background:var(--r);color:#fff}
 .btn-g{background:var(--gl);color:var(--g);border-color:var(--g)}
 .btn-g:hover{background:var(--g);color:#fff}
+.btn-b{background:var(--bl);color:var(--b);border-color:var(--b)}
+.btn-b:hover{background:var(--b);color:#fff}
 
 /* table wrap */
 .tw{background:var(--s);border:1px solid var(--bd);border-radius:8px;overflow:hidden}
@@ -119,75 +123,60 @@ tr:hover td{background:#F2FAF6}
     <div>
       <h1>School-wise Enrollment Dashboard</h1>
       <p class="sub">Source: <a href="https://sis.pesrp.edu.pk/str/analysis" target="_blank"
-        style="color:var(--g)">sis.pesrp.edu.pk</a> · Scraped daily · Stored in this repo as <code
+        style="color:var(--g)">sis.pesrp.edu.pk</a> · Scraped every 3 hours · One JSON file per district in <code
         style="font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--gl);
-        color:var(--g);padding:1px 5px;border-radius:3px">schools.csv</code> + <code
-        style="font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--gl);
-        color:var(--g);padding:1px 5px;border-radius:3px">data.json</code></p>
+        color:var(--g);padding:1px 5px;border-radius:3px">data/</code></p>
     </div>
     <div class="hdr-r">
       <span id="ts">Loading…</span>
-      <a id="csv-repo" href="schools.csv" class="btn btn-g" style="text-decoration:none">
-        📥 Download CSV
-      </a>
     </div>
   </div>
 </header>
 
 <main>
 
-  <!-- Summary cards -->
+  <!-- Summary cards: Total Schools, Total Male, Total Female, Total (Male+Female) -->
   <div class="cards">
-    <div class="card">   <div class="cl">Schools</div>  <div class="cv" id="c0">—</div><div class="cs">Public schools</div></div>
-    <div class="card b"> <div class="cl">Students</div> <div class="cv" id="c1">—</div><div class="cs">Total enrolled</div></div>
-    <div class="card">   <div class="cl">Boys</div>     <div class="cv" id="c2">—</div><div class="cs">Male students</div></div>
-    <div class="card a"> <div class="cl">Girls</div>    <div class="cv" id="c3">—</div><div class="cs">Female students</div></div>
-    <div class="card r"> <div class="cl">Teachers</div> <div class="cv" id="c4">—</div><div class="cs">Allocated</div></div>
+    <div class="card">   <div class="cl">Total Schools</div> <div class="cv" id="c0">—</div><div class="cs" id="cs0">Across Punjab</div></div>
+    <div class="card b"> <div class="cl">Total Male</div>    <div class="cv" id="c1">—</div><div class="cs">Male students</div></div>
+    <div class="card a"> <div class="cl">Total Female</div>  <div class="cv" id="c2">—</div><div class="cs">Female students</div></div>
+    <div class="card r"> <div class="cl">Total Students</div><div class="cv" id="c3">—</div><div class="cs">Male + Female</div></div>
   </div>
 
   <!-- Controls -->
   <div class="ctrl">
-    <div class="cg" style="flex:2;min-width:190px">
-      <div class="cl2">🔍 Search School</div>
-      <input type="text" id="q" placeholder="Type school name…" oninput="doFilter()">
-    </div>
     <div class="cg">
       <div class="cl2">🗺 District</div>
-      <select id="sd" onchange="doFilter()"><option value="">All Districts</option></select>
+      <select id="sd" onchange="onDistrictChange()"><option value="">Select a district…</option></select>
     </div>
     <div class="cg">
       <div class="cl2">📍 Tehsil</div>
-      <select id="st" onchange="doFilter()"><option value="">All Tehsils</option></select>
+      <select id="st" onchange="onTehsilChange()" disabled><option value="">All Tehsils</option></select>
     </div>
-    <div class="cg" style="min-width:120px">
-      <div class="cl2">⇅ Sort</div>
-      <select id="ss" onchange="doFilter()">
-        <option value="tot_d">Students ↓</option>
-        <option value="tot_a">Students ↑</option>
-        <option value="nm_a">Name A→Z</option>
-        <option value="nm_d">Name Z→A</option>
-        <option value="girls_d">Girls ↓</option>
-        <option value="tch_d">Teachers ↓</option>
-      </select>
+    <div class="cg">
+      <div class="cl2">🏘 Markaz</div>
+      <select id="sm" disabled><option value="">All Markaz</option></select>
     </div>
-    <button class="btn btn-r" onclick="doReset()">✕ Reset</button>
-    <button class="btn btn-g" onclick="dlFiltered()">⬇ Export filtered CSV</button>
+    <button class="btn btn-g" onclick="runFilterButton()" id="btnFilter" disabled>🔎 Filter</button>
+    <button class="btn btn-b" onclick="exportExcel()" id="btnExport" disabled>⬇ Export as Excel</button>
   </div>
 
   <!-- Table -->
   <div class="tw">
     <div class="th2">
-      <div class="tt">📋 School Enrollment Records</div>
-      <div class="tc" id="rc">Loading…</div>
+      <div class="tt" id="tt">📋 School Enrollment Records</div>
+      <div class="tc" id="rc">Loading districts…</div>
     </div>
-    <div id="body"><div class="center"><div class="spin"></div>Fetching school data…</div></div>
+    <div id="body"><div class="center"><div class="spin"></div>Loading district list…</div></div>
     <div class="pg" id="pager" style="display:none"></div>
   </div>
 
 </main>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
-let ALL=[], FLT=[], PG=1, PER=100, SORT="tot_d";
+let INDEX=null, ALL=[], FLT=[], PG=1, PER=100, SORT="tot_d";
+let appliedTehsil="", appliedMarkaz="";
 
 // clock
 setInterval(()=>{
@@ -203,14 +192,21 @@ const fdt  = iso => {
   catch{ return iso; }
 };
 
-// ── Load data.json ────────────────────────────────────────────────────────────
-fetch(`data.json?t=${Date.now()}`)
+function setCards(schools, male, female){
+  document.getElementById('c0').textContent = fmt(schools);
+  document.getElementById('c1').textContent = fmt(male);
+  document.getElementById('c2').textContent = fmt(female);
+  document.getElementById('c3').textContent = fmt((male||0)+(female||0));
+}
+
+// ── Step 1: load the small master index (district list + global totals) ──────
+fetch(`data/index.json?t=${Date.now()}`)
   .then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
-  .then(d=>init(d))
+  .then(d=>initIndex(d))
   .catch(err=>{
     document.getElementById('body').innerHTML=`
       <div class="err">
-        ⚠ <strong>Cannot load data.json</strong> — ${esc(err.message)}<br><br>
+        ⚠ <strong>Cannot load data/index.json</strong> — ${esc(err.message)}<br><br>
         Go to your GitHub repo → <strong>Actions</strong> →
         <strong>Scrape SIS PESRP</strong> → <strong>Run workflow</strong>
         to generate the data for the first time.
@@ -218,86 +214,156 @@ fetch(`data.json?t=${Date.now()}`)
     document.getElementById('rc').textContent = '0 rows';
   });
 
-function init(d){
+function initIndex(d){
+  INDEX = d;
   document.getElementById('ts').textContent = 'Scraped: '+fdt(d.scraped_at);
 
   const s = d.summary||{};
-  document.getElementById('c0').textContent = fmt(s.total_schools  || d.schools?.length || 0);
-  document.getElementById('c1').textContent = fmt(s.total_students);
-  document.getElementById('c2').textContent = fmt(s.total_boys);
-  document.getElementById('c3').textContent = fmt(s.total_girls);
-  document.getElementById('c4').textContent = fmt(s.total_teachers);
+  setCards(s.total_schools, s.total_boys, s.total_girls);
+  document.getElementById('cs0').textContent = `Across ${fmt(s.total_districts)} districts`;
 
-  ALL = d.schools || [];
+  const districts = d.districts || [];
+  const sel = document.getElementById('sd');
+  sel.innerHTML = '<option value="">Select a district…</option>';
 
-  if(!ALL.length){
+  if(!districts.length){
     document.getElementById('body').innerHTML=`
       <div class="warn">
-        <strong>No school data yet.</strong><br>
-        Run the GitHub Actions workflow once to populate <code>schools.csv</code>
-        and <code>data.json</code>.<br><br>
+        <strong>No district data yet.</strong><br>
+        Run the GitHub Actions workflow once to populate <code>data/index.json</code>
+        and the per-district files.<br><br>
         Repo → <strong>Actions</strong> → <strong>Scrape SIS PESRP</strong> →
         <strong>Run workflow</strong>
-        ${d.ajax_endpoints?.length
-          ? '<br><br>AJAX endpoints captured this run:<br>'
-            + d.ajax_endpoints.slice(0,5).map(e=>`<code>${esc(e.url)}</code>`).join('<br>')
-          : ''}
       </div>`;
-    document.getElementById('rc').textContent = '0 rows';
+    document.getElementById('rc').textContent = '0 districts';
     return;
   }
 
-  // Populate district filter
-  const dists = [...new Set(ALL.map(r=>r.district||''))].filter(Boolean).sort();
-  const dSel  = document.getElementById('sd');
-  dists.forEach(v=>{ const o=document.createElement('option'); o.value=v; o.textContent=v; dSel.appendChild(o); });
+  districts.forEach(e=>{
+    const o = document.createElement('option');
+    o.value = e.slug;
+    o.textContent = `${e.district} (${fmt(e.total_schools)} schools)`;
+    o.dataset.file = e.file;
+    sel.appendChild(o);
+  });
 
-  doFilter();
+  document.getElementById('rc').textContent = `${fmt(districts.length)} districts available`;
+  document.getElementById('body').innerHTML =
+    `<div class="center">👆 Select a district above to load its schools.</div>`;
 }
 
-// ── Filter + Sort ─────────────────────────────────────────────────────────────
-function doFilter(){
-  const q    = document.getElementById('q').value.toLowerCase().trim();
-  const dist = document.getElementById('sd').value;
-  const teh  = document.getElementById('st').value;
-  SORT       = document.getElementById('ss').value;
+// ── Step 2: load ONE district's JSON when the user picks it ───────────────────
+function onDistrictChange(){
+  const sel  = document.getElementById('sd');
+  const opt  = sel.options[sel.selectedIndex];
+  const slug = sel.value;
 
-  // Repopulate tehsil list when district changes
-  if(dist){
-    const tehs=[...new Set(ALL.filter(r=>r.district===dist).map(r=>r.tehsil||''))].filter(Boolean).sort();
-    const tSel=document.getElementById('st');
-    const cur=tSel.value;
-    tSel.innerHTML='<option value="">All Tehsils</option>';
-    tehs.forEach(v=>{ const o=document.createElement('option'); o.value=v; o.textContent=v;
-      if(v===cur)o.selected=true; tSel.appendChild(o); });
+  if(!slug){
+    ALL = []; FLT = [];
+    setControlsEnabled(false);
+    const s = INDEX?.summary || {};
+    setCards(s.total_schools, s.total_boys, s.total_girls);
+    document.getElementById('cs0').textContent = `Across ${fmt(s.total_districts)} districts`;
+    document.getElementById('tt').textContent = '📋 School Enrollment Records';
+    document.getElementById('body').innerHTML =
+      `<div class="center">👆 Select a district above to load its schools.</div>`;
+    document.getElementById('rc').textContent =
+      `${fmt((INDEX?.districts||[]).length)} districts available`;
+    return;
   }
 
+  const file = opt.dataset.file || `data/${slug}.json`;
+
+  document.getElementById('body').innerHTML =
+    `<div class="center"><div class="spin"></div>Loading ${esc(opt.textContent)}…</div>`;
+  document.getElementById('rc').textContent = 'Loading…';
+  setControlsEnabled(false);
+
+  fetch(`${file}?t=${Date.now()}`)
+    .then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+    .then(d=>initDistrict(d))
+    .catch(err=>{
+      document.getElementById('body').innerHTML = `
+        <div class="err">⚠ <strong>Cannot load ${esc(file)}</strong> — ${esc(err.message)}</div>`;
+      document.getElementById('rc').textContent = '0 rows';
+    });
+}
+
+function initDistrict(d){
+  document.getElementById('ts').textContent = `${d.district} updated: ${fdt(d.scraped_at)}`;
+  document.getElementById('tt').textContent = `📋 ${d.district} — Enrollment Records`;
+
+  ALL = (d.schools || []).map(r=>({
+    ...r,
+    total_students: r.total_school_students || 0,
+    boys:           r.total_school_boys || 0,
+    girls:          r.total_school_girls || 0,
+    grades_count:   (r.grades||[]).filter(g=>g.grade_name!=='No Data').length,
+  }));
+
+  // Reset cascading dropdowns for the newly loaded district
+  appliedTehsil = ""; appliedMarkaz = "";
+
+  const tehs = [...new Set(ALL.map(r=>r.tehsil||''))].filter(Boolean).sort();
+  const tSel = document.getElementById('st');
+  tSel.innerHTML = '<option value="">All Tehsils</option>';
+  tehs.forEach(v=>{ const o=document.createElement('option'); o.value=v; o.textContent=v; tSel.appendChild(o); });
+
+  populateMarkazOptions('');  // all markazes in the district to start
+
+  setControlsEnabled(true);
+  SORT = 'tot_d';
+  recompute();
+}
+
+// Markaz options depend on the currently selected Tehsil (cascading)
+function onTehsilChange(){
+  populateMarkazOptions(document.getElementById('st').value);
+}
+
+function populateMarkazOptions(tehsilFilter){
+  const pool = tehsilFilter ? ALL.filter(r=>r.tehsil===tehsilFilter) : ALL;
+  const markazes = [...new Set(pool.map(r=>r.markaz||''))].filter(Boolean).sort();
+  const mSel = document.getElementById('sm');
+  mSel.innerHTML = '<option value="">All Markaz</option>';
+  markazes.forEach(v=>{ const o=document.createElement('option'); o.value=v; o.textContent=v; mSel.appendChild(o); });
+}
+
+function setControlsEnabled(on){
+  ['st','sm','btnFilter','btnExport'].forEach(id=>{
+    document.getElementById(id).disabled = !on;
+  });
+}
+
+// ── Filter button: apply the currently selected Tehsil/Markaz to the table ────
+function runFilterButton(){
+  appliedTehsil = document.getElementById('st').value;
+  appliedMarkaz = document.getElementById('sm').value;
+  recompute();
+}
+
+// ── Recompute FLT from ALL using the last-APPLIED tehsil/markaz + current sort ─
+function recompute(){
   FLT = ALL.filter(r=>{
-    if(dist && r.district !== dist) return false;
-    if(teh  && r.tehsil  !== teh)  return false;
-    if(q && !(r.school_name||'').toLowerCase().includes(q)) return false;
+    if(appliedTehsil && r.tehsil !== appliedTehsil) return false;
+    if(appliedMarkaz && r.markaz !== appliedMarkaz) return false;
     return true;
   });
 
   FLT.sort((a,b)=>{
     if(SORT==='tot_d')   return (b.total_students||0)-(a.total_students||0);
     if(SORT==='tot_a')   return (a.total_students||0)-(b.total_students||0);
-    if(SORT==='nm_a')    return (a.school_name||'').localeCompare(b.school_name||'');
-    if(SORT==='nm_d')    return (b.school_name||'').localeCompare(a.school_name||'');
+    if(SORT==='boys_d')  return (b.boys||0)-(a.boys||0);
     if(SORT==='girls_d') return (b.girls||0)-(a.girls||0);
-    if(SORT==='tch_d')   return (b.teachers||0)-(a.teachers||0);
     return 0;
   });
 
-  PG=1; draw();
-}
+  const male   = FLT.reduce((sum,r)=>sum+(r.boys||0),0);
+  const female = FLT.reduce((sum,r)=>sum+(r.girls||0),0);
+  setCards(FLT.length, male, female);
+  document.getElementById('cs0').textContent = 'Currently filtered';
 
-function doReset(){
-  document.getElementById('q').value='';
-  document.getElementById('sd').value='';
-  document.getElementById('st').innerHTML='<option value="">All Tehsils</option>';
-  document.getElementById('ss').value='tot_d';
-  doFilter();
+  PG=1; draw();
 }
 
 // ── Draw table ────────────────────────────────────────────────────────────────
@@ -321,7 +387,7 @@ function draw(){
 
   const rows = slice.map((r,i)=>{
     const tot = r.total_students||0;
-    const b   = r.boys||0, g=r.girls||0, tch=r.teachers||0;
+    const b   = r.boys||0, g=r.girls||0;
     const bPct = tot ? Math.round(b/tot*100) : 0;
     const gPct = tot ? Math.round(g/tot*100) : 0;
     const bw   = tot ? Math.round(tot/maxT*100) : 0;
@@ -329,9 +395,8 @@ function draw(){
       <td style="color:var(--mt);font-family:'JetBrains Mono',monospace;font-size:11px">${start+i+1}</td>
       <td>
         <strong>${esc(r.school_name||'—')}</strong>
-        ${r.school_id?`<br><span style="font-size:10px;color:var(--mt);font-family:'JetBrains Mono',monospace">${esc(r.school_id)}</span>`:''}
+        ${r.emis_code?`<br><span style="font-size:10px;color:var(--mt);font-family:'JetBrains Mono',monospace">EMIS ${esc(r.emis_code)}</span>`:''}
       </td>
-      <td><span class="badge">${esc(r.district||'—')}</span></td>
       <td style="font-size:12px;color:var(--mt)">${esc(r.tehsil||'—')}</td>
       <td style="font-size:12px;color:var(--mt)">${esc(r.markaz||'—')}</td>
       <td>
@@ -342,7 +407,7 @@ function draw(){
       </td>
       <td><span class="boys">${fmt(b)}</span> <span class="pct">(${bPct}%)</span></td>
       <td><span class="girls">${fmt(g)}</span> <span class="pct">(${gPct}%)</span></td>
-      <td style="font-family:'JetBrains Mono',monospace;font-size:12px">${tch?fmt(tch):'—'}</td>
+      <td><span class="badge">${r.grades_count} grade${r.grades_count!==1?'s':''}</span></td>
     </tr>`;
   }).join('');
 
@@ -351,13 +416,12 @@ function draw(){
       <thead><tr>
         <th style="cursor:default">#</th>
         <th style="cursor:default">School Name</th>
-        <th style="cursor:default">District</th>
         <th style="cursor:default">Tehsil</th>
         <th style="cursor:default">Markaz</th>
         <th onclick="setSort('tot_d','tot_a')" class="${SORT==='tot_d'?'desc':SORT==='tot_a'?'asc':''}">Students</th>
-        <th onclick="setSort('nm_a','nm_d')"   class="${SORT==='nm_a'?'asc':SORT==='nm_d'?'desc':''}">Boys</th>
+        <th onclick="setSort('boys_d','')"     class="${SORT==='boys_d'?'desc':''}">Boys</th>
         <th onclick="setSort('girls_d','')"    class="${SORT==='girls_d'?'desc':''}">Girls</th>
-        <th onclick="setSort('tch_d','')"      class="${SORT==='tch_d'?'desc':''}">Teachers</th>
+        <th style="cursor:default">Grade Data</th>
       </tr></thead>
       <tbody>${rows}</tbody>
     </table></div>`;
@@ -378,25 +442,29 @@ function draw(){
 
 function go(p){ PG=p; draw(); window.scrollTo({top:0,behavior:'smooth'}); }
 function setSort(asc, desc){
-  document.getElementById('ss').value = (SORT===asc&&desc) ? desc : asc;
-  doFilter();
+  SORT = (SORT===asc&&desc) ? desc : asc;
+  recompute();
 }
 
-// ── Export filtered results as CSV ────────────────────────────────────────────
-function dlFiltered(){
-  const hdrs = ['School ID','School Name','District','Tehsil','Markaz',
-                'Total Students','Boys','Girls','Teachers'];
-  const rows = FLT.map(r=>[
-    r.school_id, r.school_name, r.district, r.tehsil, r.markaz,
-    r.total_students, r.boys, r.girls, r.teachers
-  ].map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(','));
+// ── Export currently filtered results (FLT) as an Excel file ──────────────────
+function exportExcel(){
+  if(!FLT.length){ alert('No rows to export — load a district and apply a filter first.'); return; }
 
-  const csv  = [hdrs.join(','), ...rows].join('\r\n');
-  const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8'});
-  const a    = document.createElement('a');
-  a.href     = URL.createObjectURL(blob);
-  a.download = `sis_pesrp_${new Date().toISOString().slice(0,10)}.csv`;
-  a.click();
+  const sel  = document.getElementById('sd');
+  const dist = sel.options[sel.selectedIndex]?.textContent || 'district';
+
+  const headers = ['EMIS Code','School ID','School Name','District','Tehsil','Markaz',
+                    'Total Students','Boys','Girls'];
+  const rows = FLT.map(r=>[
+    r.emis_code, r.school_id, r.school_name, r.district, r.tehsil, r.markaz,
+    r.total_students, r.boys, r.girls
+  ]);
+
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+  ws['!cols'] = [{wch:12},{wch:10},{wch:32},{wch:16},{wch:16},{wch:16},{wch:14},{wch:10},{wch:10}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Schools');
+  XLSX.writeFile(wb, `sis_pesrp_${dist.replace(/[^a-z0-9]+/gi,'_')}_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 </script>
 </body>
