@@ -533,6 +533,19 @@ function onViewModeChange() {
 /* ═══════════════════════════════════════════════════════════════════
    RECOMPUTE — filter + sort + draw
    ═══════════════════════════════════════════════════════════════════ */
+/* EMIS-code ascending comparator — numeric-aware, blanks sorted last */
+function emisCompare(a, b) {
+  const ae = a.emis_code, be = b.emis_code;
+  const an = parseInt(String(ae ?? '').replace(/\D/g, ''), 10);
+  const bn = parseInt(String(be ?? '').replace(/\D/g, ''), 10);
+  const aHas = !isNaN(an) && String(ae ?? '').trim() !== '';
+  const bHas = !isNaN(bn) && String(be ?? '').trim() !== '';
+  if (aHas && bHas) return an - bn;
+  if (aHas) return -1;
+  if (bHas) return 1;
+  return String(ae ?? '').localeCompare(String(be ?? ''));
+}
+
 function recompute() {
   FLT = ALL.filter(r => {
     if (appliedTehsil && r.tehsil !== appliedTehsil) return false;
@@ -540,13 +553,18 @@ function recompute() {
     return true;
   });
 
-  FLT.sort((a, b) => {
-    if (SORT === 'tot_d')   return (b.total_students || 0) - (a.total_students || 0);
-    if (SORT === 'tot_a')   return (a.total_students || 0) - (b.total_students || 0);
-    if (SORT === 'boys_d')  return (b.boys || 0) - (a.boys || 0);
-    if (SORT === 'girls_d') return (b.girls || 0) - (a.girls || 0);
-    return 0;
-  });
+  if (DETAILED) {
+    // detailed / grade-wise table is always listed in EMIS code ascending order
+    FLT.sort(emisCompare);
+  } else {
+    FLT.sort((a, b) => {
+      if (SORT === 'tot_d')   return (b.total_students || 0) - (a.total_students || 0);
+      if (SORT === 'tot_a')   return (a.total_students || 0) - (b.total_students || 0);
+      if (SORT === 'boys_d')  return (b.boys || 0) - (a.boys || 0);
+      if (SORT === 'girls_d') return (b.girls || 0) - (a.girls || 0);
+      return 0;
+    });
+  }
 
   PG = 1;
   if (DETAILED) drawDetailed();
@@ -698,7 +716,7 @@ function drawDetailed() {
 
   /* ── HEADER ROW 1  (section banners + fixed cols) ────────────── */
   let h1 = `
-    <th rowspan="${headerRowSpan}" class="dt-h-fix">EMIS CODE</th>
+    <th rowspan="${headerRowSpan}" class="dt-h-fix">EMIS CODE ▲</th>
     <th rowspan="${headerRowSpan}" class="dt-h-fix" style="text-align:left;padding-left:4px">NAME OF SCHOOL</th>`;
   sections.forEach(sec => {
     const span = sec.grades.length * perGradeCols + 1;
